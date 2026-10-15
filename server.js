@@ -14,196 +14,138 @@ const HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   Accept:
     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9",
-  "Cache-Control": "no-cache"
+  "Accept-Language": "en-US,en;q=0.9"
 };
 
-// Convert relative URLs into absolute URLs.
-function absoluteUrl(url) {
-  if (!url || typeof url !== "string") return null;
-
-  url = url.trim();
-
-  if (
-    !url ||
-    url.startsWith("data:") ||
-    url.startsWith("javascript:")
-  ) {
-    return null;
-  }
+// Convert relative URLs to absolute URLs.
+function absoluteUrl(value) {
+  if (!value || typeof value !== "string") return null;
 
   try {
-    return new URL(url, BASE_URL).href;
+    const url = new URL(value, BASE_URL);
+
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return null;
+    }
+
+    return url.href;
   } catch {
     return null;
   }
 }
 
-// Read the first available attribute from an element.
-function getAttribute($element, attributes) {
-  for (const attribute of attributes) {
-    const value = $element.attr(attribute);
-
-    if (value && value.trim()) {
-      return value.trim();
-    }
-  }
-
-  return null;
-}
-
-// Extract a thumbnail from common image attributes.
-function extractThumbnail($, card) {
-  const image = card.find("img").first();
-
-  const value = getAttribute(image, [
-    "data-src",
-    "data-original",
-    "data-lazy-src",
-    "src",
-    "data-thumb"
-  ]);
-
-  if (value) {
-    return absoluteUrl(value);
-  }
-
-  // Some websites put thumbnails on the card itself.
-  const background = getAttribute(card, [
-    "data-thumb",
-    "data-thumbnail",
-    "data-image"
-  ]);
-
-  if (background) {
-    return absoluteUrl(background);
-  }
-
-  return null;
-}
-
-// Determine whether a URL looks like a playable preview.
-function isVideoPreviewUrl(url) {
-  if (!url) return false;
-
-  const cleanUrl = url.split(/[?#]/)[0].toLowerCase();
-
-  // Common video formats.
-  if (/\.(mp4|webm|m4v|ogv|m3u8)$/i.test(cleanUrl)) {
-    return true;
-  }
-
-  // Common preview-related URL patterns.
-  return (
-    /preview/i.test(url) &&
-    /\.(mp4|webm|m4v|ogv)(?:[?#]|$)/i.test(url)
-  );
-}
-
-// Extract preview URLs from a video's search-result card.
-function extractPreview($, card) {
-  const candidates = [];
-
-  // 1. Look for actual video elements and their sources.
-  card.find("video").each((_, element) => {
-    const video = $(element);
-
-    const src = getAttribute(video, [
-      "src",
-      "data-src",
-      "data-video-src",
-      "data-preview",
-      "data-preview-url"
-    ]);
-
-    if (src) candidates.push(src);
-
-    video.find("source").each((__, source) => {
-      const sourceElement = $(source);
-
-      const sourceUrl = getAttribute(sourceElement, [
-        "src",
-        "data-src"
-      ]);
-
-      if (sourceUrl) candidates.push(sourceUrl);
-    });
-  });
-
-  // 2. Check common preview attributes on the card and descendants.
-  const previewAttributes = [
-    "data-preview",
-    "data-preview-url",
-    "data-preview-src",
-    "data-video-preview",
-    "data-video-preview-url",
-    "data-video-src",
-    "data-preview-video",
-    "data-preview-video-url",
-    "data-mp4",
-    "data-video"
+// Extract a JSON array from embedded page data.
+// Handles strings containing brackets without confusing them
+// with the brackets that delimit the array.
+function extractJsonArray(html, propertyName) {
+  const patterns = [
+    `"${propertyName}"`,
+    `\\u0022${propertyName}\\u0022`
   ];
 
-  const elements = [card[0], ...card.find("*").toArray()];
+  let propertyIndex = -1;
 
-  for (const element of elements) {
-    const el = $(element);
+  for (const pattern of patterns) {
+    propertyIndex = html.indexOf(pattern);
 
-    for (const attribute of previewAttributes) {
-      const value = el.attr(attribute);
-
-      if (value) candidates.push(value);
-    }
+    if (propertyIndex !== -1) break;
   }
 
-  // 3. Check inline scripts inside the card.
-  card.find("script").each((_, element) => {
-    const scriptText = $(element).html() || "";
+  if (propertyIndex === -1) return null;
 
-    const urlMatches = scriptText.match(
-      /https?:\\?\/\\?\/[^"'\\\s<>]+?\.(?:mp4|webm|m4v|ogv)(?:\?[^"'\\\s<>]*)?/gi
-    );
+  const start = html.indexOf("[", propertyIndex);
 
-    if (urlMatches) {
-      candidates.push(...urlMatches);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < html.length; i++) {
+    const char = html[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+
+      continue;
     }
-  });
 
-  // Return the first URL that looks like a playable video.
-  for (let candidate of candidates) {
-    candidate = candidate
-      .replace(/\\u0026/g, "&")
-      .replace(/\\\//g, "/")
-      .replace(/&amp;/g, "&")
-      .trim();
+    if (char === '"') {
+      inString = true;
+    } else if (char === "[") {
+      depth++;
+    } else if (char === "]") {
+      depth--;
 
-    const url = absoluteUrl(candidate);
-
-    if (url && isVideoPreviewUrl(url)) {
-      return url;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(start, i + 1));
+        } catch {
+          return null;
+        }
+      }
     }
   }
 
   return null;
 }
 
-// Extract text matching a selector.
-function extractText(card, selectors) {
-  for (const selector of selectors) {
-    const element = card.find(selector).first();
-    const value = element.text().trim();
-
-    if (value) return value;
+// Format duration in seconds as MM:SS or HH:MM:SS.
+function formatDuration(seconds) {
+  if (seconds == null || !Number.isFinite(Number(seconds))) {
+    return null;
   }
 
-  return null;
+  const total = Math.max(0, Math.floor(Number(seconds)));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+
+  const pad = (number) => String(number).padStart(2, "0");
+
+  return hours > 0
+    ? `${pad(hours)}:${pad(minutes)}:${pad(secs)}`
+    : `${pad(minutes)}:${pad(secs)}`;
+}
+
+// Format view count.
+function formatViews(views) {
+  if (views == null || !Number.isFinite(Number(views))) {
+    return null;
+  }
+
+  return `${Number(views).toLocaleString("en-US")} views`;
+}
+
+// Map the website's videoThumbProps to your API response.
+function normalizeVideo(video) {
+  const preview =
+    absoluteUrl(video.trailerURL) ||
+    absoluteUrl(video.trailerFallbackUrl);
+
+  return {
+    title: video.title || "",
+    videoUrl: absoluteUrl(video.pageURL),
+    thumbnail:
+      absoluteUrl(video.thumbURL) ||
+      absoluteUrl(video.imageURL),
+    preview,
+    previewThumbnail: absoluteUrl(video.previewThumbURL),
+    duration: formatDuration(video.duration),
+    views: formatViews(video.views)
+  };
 }
 
 app.get("/api/search", async (req, res) => {
   const query = String(req.query.q || "").trim();
 
   const parsedPage = Number.parseInt(req.query.page || "1", 10);
-
   const page = Number.isFinite(parsedPage)
     ? Math.max(1, Math.min(100, parsedPage))
     : 1;
@@ -233,84 +175,84 @@ app.get("/api/search", async (req, res) => {
       headers: HEADERS
     });
 
-    const $ = cheerio.load(response.data);
-    const results = [];
-    const seenUrls = new Set();
+    const html = response.data;
 
-    // Search for video-page links.
-    $('a[href*="/videos/"]').each((_, element) => {
-      const anchor = $(element);
-      const href = anchor.attr("href");
+    // Preferred method: extract the site's embedded video data.
+    const videoThumbProps = extractJsonArray(
+      html,
+      "videoThumbProps"
+    );
 
-      if (!href) return;
+    if (Array.isArray(videoThumbProps)) {
+      const results = videoThumbProps
+        .filter((video) => video && video.videoType === "video")
+        .map(normalizeVideo)
+        .filter((video) => video.videoUrl);
 
-      const videoUrl = absoluteUrl(href);
-
-      if (!videoUrl) return;
-
-      const parsedUrl = new URL(videoUrl);
-
-      // Exclude creator listings and other nested paths.
-      if (!/^\/videos\/[^/]+\/?$/i.test(parsedUrl.pathname)) {
-        return;
-      }
-
-      if (seenUrls.has(videoUrl)) return;
-
-      // Find the likely video-card container.
-      let card = anchor.closest(
-        "article, .thumb-list__item, .video-thumb, .thumb, .thumb-container"
+      console.log(
+        `Results: ${results.length}; previews: ${
+          results.filter((video) => video.preview).length
+        }`
       );
 
-      // Fallback if the website uses different class names.
-      if (!card.length) {
-        card = anchor.parent();
-      }
+      return res.json({
+        query,
+        page,
+        count: results.length,
+        results
+      });
+    }
 
-      // Find the title.
+    // Fallback: extract basic results from HTML cards.
+    const $ = cheerio.load(html);
+    const results = [];
+    const seen = new Set();
+
+    $('a[href*="/videos/"]').each((_, element) => {
+      const anchor = $(element);
+      const videoUrl = absoluteUrl(anchor.attr("href"));
+
+      if (!videoUrl || seen.has(videoUrl)) return;
+
+      const pathname = new URL(videoUrl).pathname;
+
+      if (!/^\/videos\/[^/]+\/?$/i.test(pathname)) return;
+
+      const card = anchor.closest(
+        "article, .thumb-list__item, .video-thumb, .thumb"
+      );
+
       const title =
         anchor.attr("title") ||
         anchor.attr("aria-label") ||
-        extractText(card, [
-          ".title",
-          ".thumb-under-title",
-          ".video-title",
-          "[class*='title']"
-        ]) ||
+        card.find("[class*='title']").first().text().trim() ||
         anchor.text().trim();
 
       if (!title) return;
 
-      const thumbnail = extractThumbnail($, card);
-      const preview = extractPreview($, card);
+      const image = card.find("img").first();
 
-      const duration = extractText(card, [
-        ".duration",
-        ".thumb-image-container__duration",
-        "[class*='duration']"
-      ]);
+      const thumbnail = absoluteUrl(
+        image.attr("data-src") ||
+          image.attr("data-original") ||
+          image.attr("src")
+      );
 
-      const views = extractText(card, [
-        ".views",
-        "[class*='views']"
-      ]);
-
-      seenUrls.add(videoUrl);
+      seen.add(videoUrl);
 
       results.push({
-        title: title.trim(),
+        title,
         videoUrl,
         thumbnail,
-        preview,
-        duration,
-        views
+        preview: null,
+        previewThumbnail: null,
+        duration: null,
+        views: null
       });
     });
 
     console.log(
-      `Found ${results.length} results; previews: ${
-        results.filter((item) => item.preview).length
-      }`
+      `Fallback results: ${results.length}. Embedded video data was not found.`
     );
 
     res.json({
