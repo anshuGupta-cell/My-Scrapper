@@ -5,13 +5,205 @@ const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BASE_URL = "https://xhamster46.desi";
 
 app.use(express.static(path.join(__dirname, "public")));
+
+const HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "Cache-Control": "no-cache"
+};
+
+// Convert relative URLs into absolute URLs.
+function absoluteUrl(url) {
+  if (!url || typeof url !== "string") return null;
+
+  url = url.trim();
+
+  if (
+    !url ||
+    url.startsWith("data:") ||
+    url.startsWith("javascript:")
+  ) {
+    return null;
+  }
+
+  try {
+    return new URL(url, BASE_URL).href;
+  } catch {
+    return null;
+  }
+}
+
+// Read the first available attribute from an element.
+function getAttribute($element, attributes) {
+  for (const attribute of attributes) {
+    const value = $element.attr(attribute);
+
+    if (value && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+// Extract a thumbnail from common image attributes.
+function extractThumbnail($, card) {
+  const image = card.find("img").first();
+
+  const value = getAttribute(image, [
+    "data-src",
+    "data-original",
+    "data-lazy-src",
+    "src",
+    "data-thumb"
+  ]);
+
+  if (value) {
+    return absoluteUrl(value);
+  }
+
+  // Some websites put thumbnails on the card itself.
+  const background = getAttribute(card, [
+    "data-thumb",
+    "data-thumbnail",
+    "data-image"
+  ]);
+
+  if (background) {
+    return absoluteUrl(background);
+  }
+
+  return null;
+}
+
+// Determine whether a URL looks like a playable preview.
+function isVideoPreviewUrl(url) {
+  if (!url) return false;
+
+  const cleanUrl = url.split(/[?#]/)[0].toLowerCase();
+
+  // Common video formats.
+  if (/\.(mp4|webm|m4v|ogv|m3u8)$/i.test(cleanUrl)) {
+    return true;
+  }
+
+  // Common preview-related URL patterns.
+  return (
+    /preview/i.test(url) &&
+    /\.(mp4|webm|m4v|ogv)(?:[?#]|$)/i.test(url)
+  );
+}
+
+// Extract preview URLs from a video's search-result card.
+function extractPreview($, card) {
+  const candidates = [];
+
+  // 1. Look for actual video elements and their sources.
+  card.find("video").each((_, element) => {
+    const video = $(element);
+
+    const src = getAttribute(video, [
+      "src",
+      "data-src",
+      "data-video-src",
+      "data-preview",
+      "data-preview-url"
+    ]);
+
+    if (src) candidates.push(src);
+
+    video.find("source").each((__, source) => {
+      const sourceElement = $(source);
+
+      const sourceUrl = getAttribute(sourceElement, [
+        "src",
+        "data-src"
+      ]);
+
+      if (sourceUrl) candidates.push(sourceUrl);
+    });
+  });
+
+  // 2. Check common preview attributes on the card and descendants.
+  const previewAttributes = [
+    "data-preview",
+    "data-preview-url",
+    "data-preview-src",
+    "data-video-preview",
+    "data-video-preview-url",
+    "data-video-src",
+    "data-preview-video",
+    "data-preview-video-url",
+    "data-mp4",
+    "data-video"
+  ];
+
+  const elements = [card[0], ...card.find("*").toArray()];
+
+  for (const element of elements) {
+    const el = $(element);
+
+    for (const attribute of previewAttributes) {
+      const value = el.attr(attribute);
+
+      if (value) candidates.push(value);
+    }
+  }
+
+  // 3. Check inline scripts inside the card.
+  card.find("script").each((_, element) => {
+    const scriptText = $(element).html() || "";
+
+    const urlMatches = scriptText.match(
+      /https?:\\?\/\\?\/[^"'\\\s<>]+?\.(?:mp4|webm|m4v|ogv)(?:\?[^"'\\\s<>]*)?/gi
+    );
+
+    if (urlMatches) {
+      candidates.push(...urlMatches);
+    }
+  });
+
+  // Return the first URL that looks like a playable video.
+  for (let candidate of candidates) {
+    candidate = candidate
+      .replace(/\\u0026/g, "&")
+      .replace(/\\\//g, "/")
+      .replace(/&amp;/g, "&")
+      .trim();
+
+    const url = absoluteUrl(candidate);
+
+    if (url && isVideoPreviewUrl(url)) {
+      return url;
+    }
+  }
+
+  return null;
+}
+
+// Extract text matching a selector.
+function extractText(card, selectors) {
+  for (const selector of selectors) {
+    const element = card.find(selector).first();
+    const value = element.text().trim();
+
+    if (value) return value;
+  }
+
+  return null;
+}
 
 app.get("/api/search", async (req, res) => {
   const query = String(req.query.q || "").trim();
 
   const parsedPage = Number.parseInt(req.query.page || "1", 10);
+
   const page = Number.isFinite(parsedPage)
     ? Math.max(1, Math.min(100, parsedPage))
     : 1;
@@ -23,14 +215,11 @@ app.get("/api/search", async (req, res) => {
   }
 
   try {
-    // Construct the official search URL.
     const searchUrl = new URL(
-      "/search/" +
-        encodeURIComponent(query).replace(/%20/g, "+"),
-      "https://xhamster46.desi"
+      "/search/" + encodeURIComponent(query).replace(/%20/g, "+"),
+      BASE_URL
     );
 
-    // Pagination: /search/genshin?page=2
     if (page > 1) {
       searchUrl.searchParams.set("page", String(page));
     }
@@ -38,110 +227,79 @@ app.get("/api/search", async (req, res) => {
     console.log("Fetching:", searchUrl.href);
 
     const response = await axios.get(searchUrl.href, {
-  timeout: 30000,
-  maxRedirects: 5,
-  responseType: "text",
-  headers: {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept":
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Cache-Control": "no-cache"
-  }
-});
+      timeout: 30000,
+      maxRedirects: 5,
+      responseType: "text",
+      headers: HEADERS
+    });
 
     const $ = cheerio.load(response.data);
     const results = [];
-    const seen = new Set();
+    const seenUrls = new Set();
 
-    // Extract video links and their surrounding metadata.
-    $("a[href]").each((_, element) => {
-      const link = $(element);
-      const href = link.attr("href");
+    // Search for video-page links.
+    $('a[href*="/videos/"]').each((_, element) => {
+      const anchor = $(element);
+      const href = anchor.attr("href");
 
       if (!href) return;
 
-      let videoUrl;
+      const videoUrl = absoluteUrl(href);
 
-      try {
-        videoUrl = new URL(href, searchUrl);
-      } catch {
+      if (!videoUrl) return;
+
+      const parsedUrl = new URL(videoUrl);
+
+      // Exclude creator listings and other nested paths.
+      if (!/^\/videos\/[^/]+\/?$/i.test(parsedUrl.pathname)) {
         return;
       }
 
-      if (
-        videoUrl.hostname !== "xhamster46.desi" ||
-        !videoUrl.pathname.includes("/videos/") ||
-        seen.has(videoUrl.href)
-      ) {
-        return;
-      }
+      if (seenUrls.has(videoUrl)) return;
 
-      const card = link.closest(
-        "article, .thumb-list__item, .video-thumb, .thumb"
+      // Find the likely video-card container.
+      let card = anchor.closest(
+        "article, .thumb-list__item, .video-thumb, .thumb, .thumb-container"
       );
 
-      const container = card.length ? card : link;
-      const img = container.find("img").first();
+      // Fallback if the website uses different class names.
+      if (!card.length) {
+        card = anchor.parent();
+      }
 
+      // Find the title.
       const title =
-        link.attr("title") ||
-        img.attr("alt") ||
-        container.find("h3, h4").first().text().trim() ||
-        link.text().trim();
+        anchor.attr("title") ||
+        anchor.attr("aria-label") ||
+        extractText(card, [
+          ".title",
+          ".thumb-under-title",
+          ".video-title",
+          "[class*='title']"
+        ]) ||
+        anchor.text().trim();
 
       if (!title) return;
 
-      function absoluteUrl(value) {
-        if (!value) return null;
+      const thumbnail = extractThumbnail($, card);
+      const preview = extractPreview($, card);
 
-        try {
-          const url = new URL(value, searchUrl);
+      const duration = extractText(card, [
+        ".duration",
+        ".thumb-image-container__duration",
+        "[class*='duration']"
+      ]);
 
-          if (!["http:", "https:"].includes(url.protocol)) {
-            return null;
-          }
+      const views = extractText(card, [
+        ".views",
+        "[class*='views']"
+      ]);
 
-          return url.href;
-        } catch {
-          return null;
-        }
-      }
-
-      const thumbnail = absoluteUrl(
-        img.attr("data-src") ||
-        img.attr("data-original") ||
-        img.attr("src") ||
-        img.attr("data-lazy-src")
-      );
-
-      const preview = absoluteUrl(
-        img.attr("data-preview") ||
-        img.attr("data-video") ||
-        container.find("video source").attr("src") ||
-        container.find("video").attr("src")
-      );
-
-      const duration =
-        container
-          .find("[class*=duration]")
-          .first()
-          .text()
-          .trim() || null;
-
-      const views =
-        container
-          .find("[class*=views]")
-          .first()
-          .text()
-          .trim() || null;
-
-      seen.add(videoUrl.href);
+      seenUrls.add(videoUrl);
 
       results.push({
-        title,
-        videoUrl: videoUrl.href,
+        title: title.trim(),
+        videoUrl,
         thumbnail,
         preview,
         duration,
@@ -150,19 +308,17 @@ app.get("/api/search", async (req, res) => {
     });
 
     console.log(
-      `Page ${page}: extracted ${results.length} videos`
+      `Found ${results.length} results; previews: ${
+        results.filter((item) => item.preview).length
+      }`
     );
-
-    res.set("Cache-Control", "public, max-age=60");
 
     res.json({
       query,
       page,
       count: results.length,
-      hasMore: results.length > 0 && page < 100,
       results
     });
-
   } catch (error) {
     console.error("Scraping error:", {
       message: error.message,
@@ -171,12 +327,11 @@ app.get("/api/search", async (req, res) => {
     });
 
     res.status(502).json({
-      error: "Unable to retrieve search results.",
-      upstreamStatus: error.response?.status || null
+      error: "Unable to retrieve search results."
     });
   }
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
