@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/api/search", async (req, res) => {
   const query = String(req.query.q || "").trim();
 
-  const parsedPage = Number.parseInt(req.query.page, 10);
+  const parsedPage = Number.parseInt(req.query.page || "1", 10);
   const page = Number.isFinite(parsedPage)
     ? Math.max(1, Math.min(100, parsedPage))
     : 1;
@@ -23,18 +23,22 @@ app.get("/api/search", async (req, res) => {
   }
 
   try {
+    // Construct the official search URL.
     const searchUrl = new URL(
       "/search/" +
         encodeURIComponent(query).replace(/%20/g, "+"),
       "https://xhamster46.desi"
     );
 
+    // Pagination: /search/genshin?page=2
     if (page > 1) {
       searchUrl.searchParams.set("page", String(page));
     }
 
+    console.log("Fetching:", searchUrl.href);
+
     const response = await axios.get(searchUrl.href, {
-      timeout: 15000,
+      timeout: 20000,
       maxRedirects: 5,
       maxContentLength: 3 * 1024 * 1024,
       responseType: "text",
@@ -48,6 +52,7 @@ app.get("/api/search", async (req, res) => {
     const results = [];
     const seen = new Set();
 
+    // Extract video links and their surrounding metadata.
     $("a[href]").each((_, element) => {
       const link = $(element);
       const href = link.attr("href");
@@ -104,7 +109,8 @@ app.get("/api/search", async (req, res) => {
       const thumbnail = absoluteUrl(
         img.attr("data-src") ||
         img.attr("data-original") ||
-        img.attr("src")
+        img.attr("src") ||
+        img.attr("data-lazy-src")
       );
 
       const preview = absoluteUrl(
@@ -115,12 +121,18 @@ app.get("/api/search", async (req, res) => {
       );
 
       const duration =
-        container.find("[class*=duration]")
-          .first().text().trim() || null;
+        container
+          .find("[class*=duration]")
+          .first()
+          .text()
+          .trim() || null;
 
       const views =
-        container.find("[class*=views]")
-          .first().text().trim() || null;
+        container
+          .find("[class*=views]")
+          .first()
+          .text()
+          .trim() || null;
 
       seen.add(videoUrl.href);
 
@@ -134,6 +146,10 @@ app.get("/api/search", async (req, res) => {
       });
     });
 
+    console.log(
+      `Page ${page}: extracted ${results.length} videos`
+    );
+
     res.set("Cache-Control", "public, max-age=60");
 
     res.json({
@@ -143,11 +159,17 @@ app.get("/api/search", async (req, res) => {
       hasMore: results.length > 0 && page < 100,
       results
     });
+
   } catch (error) {
-    console.error("Scraping error:", error.message);
+    console.error("Scraping error:", {
+      message: error.message,
+      status: error.response?.status,
+      code: error.code
+    });
 
     res.status(502).json({
-      error: "Unable to retrieve search results."
+      error: "Unable to retrieve search results.",
+      upstreamStatus: error.response?.status || null
     });
   }
 });
