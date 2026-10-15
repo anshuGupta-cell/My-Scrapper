@@ -13,7 +13,7 @@ const layoutToggle = document.getElementById("layoutToggle");
 
 // App Constants & State
 const HOVER_DELAY = 600;
-const MAX_PREVIEW_SECONDS = 4;
+const MAX_PREVIEW_SECONDS = Infinity;
 
 let currentQuery = "";
 let currentPage = 0;
@@ -186,9 +186,7 @@ async function startPreview(container, manual = false) {
       button.setAttribute("aria-label", "Stop video preview");
     }
 
-    previewTimer = setTimeout(() => {
-      stopPreview();
-    }, MAX_PREVIEW_SECONDS * 1000);
+    previewTimer = null;
   } catch {
     if (activePreview === video) {
       stopPreview();
