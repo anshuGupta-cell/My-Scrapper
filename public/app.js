@@ -5,196 +5,222 @@ const status = document.getElementById("status");
 const results = document.getElementById("results");
 const resultCount = document.getElementById("resultCount");
 
-let activeRequest = null;
+let query = "";
+let page = 1;
+let loading = false;
+let hasMore = false;
+let controller = null;
+
+const seenUrls = new Set();
+
+function element(tag, className, text) {
+  const el = document.createElement(tag);
+
+  if (className) el.className = className;
+  if (text !== undefined) el.textContent = text;
+
+  return el;
+}
 
 function safeUrl(value) {
   try {
     const url = new URL(value);
 
-    if (!["https:", "http:"].includes(url.protocol)) {
-      return null;
-    }
-
-    return url.href;
+    return ["http:", "https:"].includes(url.protocol)
+      ? url.href
+      : null;
   } catch {
     return null;
   }
 }
 
-function makeElement(tag, className, text) {
-  const element = document.createElement(tag);
+function createCard(item) {
+  const card = element("article", "card");
+  const thumbnail = element("div", "thumbnail");
+  const imageUrl = safeUrl(item.thumbnail);
+  const videoUrl = safeUrl(item.videoUrl);
+  const previewUrl = safeUrl(item.preview);
 
-  if (className) {
-    element.className = className;
+  if (imageUrl) {
+    const img = element("img");
+    img.src = imageUrl;
+    img.alt = item.title || "Video thumbnail";
+    img.loading = "lazy";
+    img.decoding = "async";
+    thumbnail.append(img);
   }
 
-  if (text !== undefined) {
-    element.textContent = text;
+  const content = element("div", "card-content");
+
+  content.append(
+    element("h3", "", item.title || "Untitled video")
+  );
+
+  const meta = element("div", "meta");
+
+  if (item.duration) {
+    meta.append(element("span", "", item.duration));
   }
 
-  return element;
-}
+  if (item.views) {
+    meta.append(element("span", "", item.views));
+  }
 
-function renderResults(items) {
-  results.replaceChildren();
+  content.append(meta);
 
-  if (!items.length) {
-    results.append(
-      makeElement(
-        "p",
-        "empty",
-        "No results found. Try another search."
-      )
+  const actions = element("div", "actions");
+
+  if (videoUrl) {
+    const open = element("a", "open-button", "Open video");
+
+    open.href = videoUrl;
+    open.target = "_blank";
+    open.rel = "noopener noreferrer";
+
+    actions.append(open);
+  }
+
+  if (previewUrl) {
+    const preview = element(
+      "button",
+      "preview-button",
+      "Show preview"
     );
 
-    return;
-  }
+    preview.type = "button";
 
-  for (const item of items) {
-    const card = makeElement("article", "card");
-    const thumbnail = makeElement("div", "thumbnail");
+    preview.addEventListener("click", () => {
+      const existing = thumbnail.querySelector("video");
 
-    const thumbnailUrl = safeUrl(item.thumbnail);
-    const previewUrl = safeUrl(item.preview);
-    const videoUrl = safeUrl(item.videoUrl);
-
-    if (thumbnailUrl) {
-      const img = makeElement("img");
-
-      img.src = thumbnailUrl;
-      img.alt = item.title || "Video thumbnail";
-      img.loading = "lazy";
-      img.decoding = "async";
-
-      thumbnail.append(img);
-    }
-
-    const content = makeElement("div", "card-content");
-
-    content.append(
-      makeElement("h3", "", item.title || "Untitled video")
-    );
-
-    const meta = makeElement("div", "meta");
-
-    if (item.duration) {
-      meta.append(makeElement("span", "", item.duration));
-    }
-
-    if (item.views) {
-      meta.append(makeElement("span", "", item.views));
-    }
-
-    content.append(meta);
-
-    const actions = makeElement("div", "actions");
-
-    if (videoUrl) {
-      const open = makeElement("a", "open-button", "Open video");
-
-      open.href = videoUrl;
-      open.target = "_blank";
-      open.rel = "noopener noreferrer";
-
-      actions.append(open);
-    }
-
-    if (previewUrl) {
-      const preview = makeElement(
-        "button",
-        "preview-button",
-        "Show preview"
-      );
-
-      preview.type = "button";
-
-      preview.addEventListener("click", () => {
-        const existingVideo = thumbnail.querySelector("video");
-
-        if (existingVideo) {
-          existingVideo.remove();
-
-          const img = thumbnail.querySelector("img");
-
-          if (img) img.hidden = false;
-
-          preview.textContent = "Show preview";
-          return;
-        }
-
-        const video = makeElement("video");
-
-        video.src = previewUrl;
-        video.controls = true;
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = "none";
+      if (existing) {
+        existing.remove();
 
         const img = thumbnail.querySelector("img");
+        if (img) img.hidden = false;
 
-        if (img) img.hidden = true;
+        preview.textContent = "Show preview";
+        return;
+      }
 
-        thumbnail.append(video);
-        preview.textContent = "Hide preview";
-      });
+      const video = element("video");
 
-      actions.append(preview);
+      video.src = previewUrl;
+      video.controls = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = "none";
+
+      const img = thumbnail.querySelector("img");
+      if (img) img.hidden = true;
+
+      thumbnail.append(video);
+      preview.textContent = "Hide preview";
+    });
+
+    actions.append(preview);
+  }
+
+  content.append(actions);
+  card.append(thumbnail, content);
+
+  return card;
+}
+
+async function loadMore(reset = false) {
+  if (loading || (!hasMore && !reset)) return;
+
+  if (reset) {
+    if (controller) controller.abort();
+
+    controller = new AbortController();
+    page = 1;
+    hasMore = true;
+    seenUrls.clear();
+    results.replaceChildren();
+    resultCount.textContent = "";
+  }
+
+  loading = true;
+  button.disabled = true;
+  status.textContent = "Loading videos...";
+
+  try {
+    const response = await fetch(
+      `/api/search?q=${encodeURIComponent(query)}&page=${page}`,
+      { signal: controller.signal }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to load videos.");
     }
 
-    content.append(actions);
-    card.append(thumbnail, content);
-    results.append(card);
+    let added = 0;
+
+    for (const item of data.results || []) {
+      const url = safeUrl(item.videoUrl);
+
+      if (!url || seenUrls.has(url)) continue;
+
+      seenUrls.add(url);
+      results.append(createCard(item));
+      added++;
+    }
+
+    page++;
+    hasMore = Boolean(data.hasMore);
+
+    resultCount.textContent = `${seenUrls.size} videos`;
+
+    if (!seenUrls.size) {
+      results.append(
+        element(
+          "p",
+          "empty",
+          "No videos found. Try another search."
+        )
+      );
+    }
+
+    status.textContent = hasMore
+      ? "Scroll down to load more."
+      : "No more results available.";
+
+    // Stop automatic repeated requests if a page contains
+    // no new results.
+    if (added === 0 && data.count > 0) {
+      hasMore = false;
+      status.textContent =
+        "No new videos found on the next page.";
+    }
+
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      status.textContent = error.message;
+    }
+  } finally {
+    loading = false;
+    button.disabled = false;
   }
 }
 
 form.addEventListener("submit", async event => {
   event.preventDefault();
 
-  const query = input.value.trim();
+  query = input.value.trim();
 
   if (!query) return;
 
-  if (activeRequest) {
-    activeRequest.abort();
-  }
+  await loadMore(true);
+});
 
-  activeRequest = new AbortController();
+window.addEventListener("scroll", () => {
+  const nearBottom =
+    window.innerHeight + window.scrollY >=
+    document.documentElement.scrollHeight - 600;
 
-  button.disabled = true;
-  status.textContent = "Searching...";
-  resultCount.textContent = "";
-  results.replaceChildren();
-
-  try {
-    const response = await fetch(
-      `/api/search?q=${encodeURIComponent(query)}`,
-      { signal: activeRequest.signal }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Search failed.");
-    }
-
-    renderResults(data.results || []);
-
-    resultCount.textContent =
-      `${data.count || 0} results`;
-
-    status.textContent = "Search completed.";
-
-  } catch (error) {
-    if (error.name === "AbortError") return;
-
-    status.textContent = error.message;
-
-    results.replaceChildren(
-      makeElement("p", "empty", error.message)
-    );
-
-  } finally {
-    button.disabled = false;
-    activeRequest = null;
+  if (nearBottom) {
+    loadMore();
   }
 });
