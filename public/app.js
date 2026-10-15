@@ -16,16 +16,16 @@ let currentQuery = "";
 let currentPage = 0;
 let loading = false;
 let hasMore = false;
-let hoverTimer = null;
-let previewTimer = null;
-let searchController = null;
+let hoverTimer;
+let previewTimer;
+let searchController;
 let searchId = 0;
-
-const seenVideoUrls = new Set();
 let activePreview = null;
 
+const seenVideoUrls = new Set();
+
 function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
@@ -40,41 +40,25 @@ function safeUrl(value) {
   try {
     const url = new URL(value, location.origin);
 
-    if (!["http:", "https:"].includes(url.protocol)) {
-      return "";
-    }
-
-    return url.href;
+    return ["http:", "https:"].includes(url.protocol)
+      ? url.href
+      : "";
   } catch {
     return "";
   }
 }
 
-// Ask the image server for a smaller thumbnail where supported.
-function optimizedThumbnail(value) {
-  const url = safeUrl(value);
-
-  if (!url) return "";
-
-  try {
-    const parsed = new URL(url);
-
-    parsed.pathname = parsed.pathname.replace(
-      /s\(w:\d+,h:\d+\),webp/i,
-      "s(w:480,h:270),webp"
-    );
-
-    return parsed.href;
-  } catch {
-    return url;
-  }
+// Keep the original URL because the server may already
+// provide a small 526x298 thumbnail.
+function getThumbnail(video) {
+  return safeUrl(video.thumbnail) ||
+         safeUrl(video.previewThumbnail) ||
+         "";
 }
 
 function createVideoCard(video) {
   const videoUrl = safeUrl(video.videoUrl);
-  const thumbnail = optimizedThumbnail(
-    video.thumbnail || video.previewThumbnail
-  );
+  const thumbnail = getThumbnail(video);
   const preview = safeUrl(video.preview);
 
   if (!videoUrl) return null;
@@ -84,17 +68,14 @@ function createVideoCard(video) {
 
   card.innerHTML = `
     <div class="thumbnail-container">
-      ${
-        thumbnail
-          ? `<img
-              src="${escapeHTML(thumbnail)}"
-              alt=""
-              loading="lazy"
-              decoding="async"
-              fetchpriority="low"
-            >`
-          : `<div class="thumbnail-placeholder"></div>`
-      }
+
+      <img
+        class="video-thumbnail"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+      >
 
       ${
         preview
@@ -115,6 +96,7 @@ function createVideoCard(video) {
           ? `<span class="duration">${escapeHTML(video.duration)}</span>`
           : ""
       }
+
     </div>
 
     <div class="video-info">
@@ -123,7 +105,6 @@ function createVideoCard(video) {
         href="${escapeHTML(videoUrl)}"
         target="_blank"
         rel="noopener noreferrer"
-        title="${escapeHTML(video.title || "")}"
       >${escapeHTML(video.title || "Untitled video")}</a>
 
       <div class="video-meta">
@@ -131,6 +112,24 @@ function createVideoCard(video) {
       </div>
     </div>
   `;
+
+  const img = card.querySelector(".video-thumbnail");
+
+  if (thumbnail) {
+    img.src = thumbnail;
+
+    // Fall back to the original image URL if the thumbnail fails.
+    const fallback = safeUrl(video.imageURL);
+
+    if (fallback && fallback !== thumbnail) {
+      img.addEventListener("error", function onError() {
+        img.removeEventListener("error", onError);
+        img.src = fallback;
+      });
+    }
+  } else {
+    img.hidden = true;
+  }
 
   return card;
 }
@@ -145,8 +144,6 @@ function stopPreview() {
 
   video.pause();
   video.hidden = true;
-
-  // Remove the source to prevent continued downloads.
   video.removeAttribute("src");
   video.load();
 
@@ -166,7 +163,6 @@ async function startPreview(container) {
   activePreview = video;
   video.src = video.dataset.src;
   video.hidden = false;
-  video.preload = "none";
 
   try {
     await video.play();
@@ -176,15 +172,15 @@ async function startPreview(container) {
     previewTimer = setTimeout(() => {
       stopPreview();
     }, MAX_PREVIEW_SECONDS * 1000);
-  } catch {
+  } catch (error) {
     if (activePreview === video) {
       stopPreview();
     }
   }
 }
 
-// Hover starts a preview only after a short delay.
-resultsContainer.addEventListener("pointerover", (event) => {
+// Hover preview on desktop.
+resultsContainer.addEventListener("pointerover", event => {
   if (event.pointerType !== "mouse" || dataSaver.checked) return;
 
   const container = event.target.closest(".thumbnail-container");
@@ -198,7 +194,7 @@ resultsContainer.addEventListener("pointerover", (event) => {
   }, HOVER_DELAY);
 });
 
-resultsContainer.addEventListener("pointerout", (event) => {
+resultsContainer.addEventListener("pointerout", event => {
   if (event.pointerType !== "mouse") return;
 
   const container = event.target.closest(".thumbnail-container");
@@ -215,7 +211,7 @@ resultsContainer.addEventListener("pointerout", (event) => {
   }
 });
 
-// Data Saver is enabled by default.
+// Data Saver prevents preview downloads.
 dataSaver.addEventListener("change", () => {
   if (dataSaver.checked) {
     clearTimeout(hoverTimer);
@@ -241,9 +237,6 @@ async function loadPage(reset = false) {
 
     currentPage = 0;
     hasMore = false;
-
-    resultCount.textContent = "Loading...";
-    pageIndicator.textContent = "";
   }
 
   const requestId = searchId;
@@ -266,7 +259,7 @@ async function loadPage(reset = false) {
     });
 
     if (!response.ok) {
-      throw new Error(`Request failed: ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
@@ -300,7 +293,9 @@ async function loadPage(reset = false) {
     currentPage = nextPage;
     hasMore = data.results.length > 0;
 
-    resultCount.textContent = `${resultsContainer.children.length} videos loaded`;
+    resultCount.textContent =
+      `${resultsContainer.children.length} videos loaded`;
+
     pageIndicator.textContent = `Page ${currentPage}`;
 
     statusElement.textContent = hasMore
@@ -313,11 +308,12 @@ async function loadPage(reset = false) {
   } catch (error) {
     if (error.name === "AbortError") return;
 
-    console.error(error);
+    console.error("Search error:", error);
 
     if (requestId === searchId) {
       statusElement.textContent =
-        "Could not load results. Please try again.";
+        "Unable to load results. Please try again.";
+
       loadMoreButton.hidden = false;
     }
   } finally {
@@ -328,7 +324,7 @@ async function loadPage(reset = false) {
   }
 }
 
-searchForm.addEventListener("submit", async (event) => {
+searchForm.addEventListener("submit", event => {
   event.preventDefault();
 
   const query = searchInput.value.trim();
@@ -336,25 +332,20 @@ searchForm.addEventListener("submit", async (event) => {
   if (!query) return;
 
   currentQuery = query;
-  await loadPage(true);
+  loadPage(true);
 });
 
 loadMoreButton.addEventListener("click", () => {
   loadPage();
 });
 
-// Load the next page before the user reaches the bottom.
-const observer = new IntersectionObserver(
-  (entries) => {
-    if (
-      entries.some((entry) => entry.isIntersecting) &&
-      hasMore &&
-      !loading
-    ) {
-      loadPage();
-    }
-  },
-  { rootMargin: "350px 0px" }
-);
+// Infinite scrolling.
+const observer = new IntersectionObserver(entries => {
+  if (entries.some(entry => entry.isIntersecting) && hasMore && !loading) {
+    loadPage();
+  }
+}, {
+  rootMargin: "350px 0px"
+});
 
 observer.observe(scrollSentinel);
