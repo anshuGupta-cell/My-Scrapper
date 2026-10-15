@@ -30,12 +30,12 @@ button {
 }
 
 .header {
-  min-height: 64px;
+  min-height: 62px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 5%;
+  padding: 12px 4%;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
@@ -71,34 +71,38 @@ button {
 
 .search-section {
   max-width: 650px;
-  margin: 48px auto 35px;
+  margin: 40px auto 30px;
   text-align: center;
 }
 
 .search-section h1 {
-  margin: 0 0 10px;
-  font-size: clamp(28px, 5vw, 42px);
+  margin: 0 0 8px;
+  font-size: clamp(28px, 5vw, 40px);
 }
 
 .search-section p {
-  margin: 0 0 24px;
   color: var(--muted);
   font-size: 14px;
 }
 
+.preview-help {
+  font-size: 12px !important;
+}
+
 .search-form {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  margin-top: 20px;
 }
 
 .search-form input {
   flex: 1;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 13px 15px;
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 9px;
   outline: none;
 }
 
@@ -108,23 +112,22 @@ button {
 
 .search-form button,
 .load-more {
-  padding: 12px 20px;
+  padding: 12px 18px;
   color: white;
   background: var(--accent);
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   font-weight: 700;
 }
 
 .search-form button:disabled {
   opacity: 0.6;
-  cursor: wait;
 }
 
 .results-header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   margin: 20px 0;
   color: var(--muted);
   font-size: 13px;
@@ -133,22 +136,19 @@ button {
 .results {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px 16px;
+  gap: 22px 14px;
 }
 
 .video-card {
   min-width: 0;
-  overflow: hidden;
 }
 
 .thumbnail-container {
   position: relative;
-  width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #222229;
-  border-radius: 10px;
-  isolation: isolate;
+  border-radius: 8px;
 }
 
 .thumbnail-container img,
@@ -162,7 +162,6 @@ button {
 .thumbnail-container video {
   position: absolute;
   inset: 0;
-  z-index: 2;
   background: #111;
 }
 
@@ -172,40 +171,27 @@ button {
 
 .duration {
   position: absolute;
-  z-index: 3;
-  right: 7px;
-  bottom: 7px;
-  padding: 3px 6px;
+  right: 6px;
+  bottom: 6px;
+  padding: 3px 5px;
   color: white;
   background: rgb(0 0 0 / 75%);
   border-radius: 4px;
   font-size: 11px;
-}
-
-.preview-indicator {
-  position: absolute;
-  z-index: 3;
-  top: 8px;
-  left: 8px;
-  padding: 4px 7px;
-  color: white;
-  background: rgb(0 0 0 / 65%);
-  border-radius: 4px;
-  font-size: 10px;
   pointer-events: none;
 }
 
 .video-info {
-  padding: 10px 2px;
+  padding: 9px 1px;
 }
 
 .video-title {
   display: -webkit-box;
   overflow: hidden;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.5;
   text-decoration: none;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
@@ -218,9 +204,8 @@ button {
 
 .video-meta {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 7px;
+  margin-top: 6px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -247,45 +232,41 @@ button {
 }
 
 .footer {
-  padding: 25px 12px;
+  padding: 24px 10px;
   color: var(--muted);
   text-align: center;
   font-size: 12px;
   border-top: 1px solid var(--border);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1050px) {
   .results {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 750px) {
+@media (max-width: 700px) {
   .results {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 12px;
+    gap: 16px 10px;
+  }
+
+  .main {
+    width: 94%;
   }
 
   .search-section {
-    margin-top: 35px;
+    margin-top: 30px;
   }
 
   .video-title {
-    font-size: 13px;
+    font-size: 12px;
   }
 }
 
-@media (max-width: 380px) {
-  .header {
-    padding-inline: 12px;
-  }
-
+@media (max-width: 360px) {
   .logo {
     font-size: 18px;
-  }
-
-  .search-form {
-    gap: 6px;
   }
 
   .search-form button {
