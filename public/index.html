@@ -1,30 +1,42 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video Search</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+
+  <!-- Sticky Navigation Header -->
   <header class="topbar">
-    <a class="brand" href="/">Video<span>Search</span></a><form id="searchForm" class="search-form">
-  <input
-    id="searchInput"
-    type="search"
-    placeholder="Search videos..."
-    autocomplete="off"
-    required
-  >
-  <button id="searchButton" type="submit">Search</button>
-</form>
+    <a class="brand" href="/">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+        <path d="M4 6.75A2.75 2.75 0 0 1 6.75 4h10.5A2.75 2.75 0 0 1 20 6.75v10.5A2.75 2.75 0 0 1 17.25 20H6.75A2.75 2.75 0 0 1 4 17.25V6.75zm6 3.5v7.5l6-3.75-6-3.75z"/>
+      </svg>
+      <span>Video<strong>Search</strong></span>
+    </a>
 
-<button id="layoutToggle" class="layout-toggle" type="button">
-  ▦ Bigger
-</button>
+    <form id="searchForm" class="search-form">
+      <input
+        id="searchInput"
+        type="search"
+        placeholder="Search videos..."
+        autocomplete="off"
+        required
+      >
+      <button id="searchButton" type="submit">Search</button>
+    </form>
 
-  </header>  <main>
+    <button id="layoutToggle" class="layout-toggle" type="button" aria-pressed="false">
+      ▤ Compact
+    </button>
+  </header>
+
+  <!-- Main Content -->
+  <main>
     <section class="toolbar">
-      <span id="status">Search for videos</span>
+      <span id="status">Enter a keyword to search</span>
       <div class="toolbar-options">
         <label class="saver-toggle">
           <input id="dataSaver" type="checkbox" checked>
@@ -32,14 +44,21 @@
         </label>
         <span id="resultCount"></span>
       </div>
-    </section><div id="results" class="results large-cards"></div>
+    </section>
 
-<div id="scrollSentinel"></div>
+    <!-- Results Area -->
+    <div id="results" class="results large-cards"></div>
 
-<div class="bottom-controls">
-  <span id="pageIndicator"></span>
-  <button id="loadMoreButton" type="button" hidden>Load more</button>
-</div>
+    <!-- Infinite Scroll Sentinel -->
+    <div id="scrollSentinel"></div>
 
-  </main>  <script src="/app.js" defer></script></body>
+    <!-- Pagination Controls -->
+    <div class="bottom-controls">
+      <span id="pageIndicator"></span>
+      <button id="loadMoreButton" type="button" hidden>Load more</button>
+    </div>
+  </main>
+
+  <script src="/app.js" defer></script>
+</body>
 </html>
