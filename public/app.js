@@ -8,6 +8,7 @@ const pageIndicator = document.getElementById("pageIndicator");
 const loadMoreButton = document.getElementById("loadMoreButton");
 const scrollSentinel = document.getElementById("scrollSentinel");
 const dataSaver = document.getElementById("dataSaver");
+const layoutToggle = document.getElementById("layoutToggle");
 
 const HOVER_DELAY = 600;
 const MAX_PREVIEW_SECONDS = 4;
@@ -16,13 +17,17 @@ let currentQuery = "";
 let currentPage = 0;
 let loading = false;
 let hasMore = false;
-let hoverTimer;
-let previewTimer;
-let searchController;
+let hoverTimer = null;
+let previewTimer = null;
+let searchController = null;
 let searchId = 0;
 let activePreview = null;
 
 const seenVideoUrls = new Set();
+
+/* =========================================
+   HELPERS
+========================================= */
 
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -48,17 +53,22 @@ function safeUrl(value) {
   }
 }
 
-// Keep the original URL because the server may already
-// provide a small 526x298 thumbnail.
 function getThumbnail(video) {
-  return safeUrl(video.thumbnail) ||
-         safeUrl(video.previewThumbnail) ||
-         "";
+  return (
+    safeUrl(video.thumbnail) ||
+    safeUrl(video.previewThumbnail) ||
+    ""
+  );
 }
+
+/* =========================================
+   VIDEO CARD CREATION
+========================================= */
 
 function createVideoCard(video) {
   const videoUrl = safeUrl(video.videoUrl);
   const thumbnail = getThumbnail(video);
+  const fallbackThumbnail = safeUrl(video.imageURL);
   const preview = safeUrl(video.preview);
 
   if (!videoUrl) return null;
@@ -79,7 +89,8 @@ function createVideoCard(video) {
 
       ${
         preview
-          ? `<video
+          ? `
+            <video
               class="video-preview"
               data-src="${escapeHTML(preview)}"
               muted
@@ -87,7 +98,14 @@ function createVideoCard(video) {
               playsinline
               preload="none"
               hidden
-            ></video>`
+            ></video>
+
+            <button
+              class="preview-button"
+              type="button"
+              aria-label="Play video preview"
+            >▶ Preview</button>
+          `
           : ""
       }
 
@@ -100,6 +118,7 @@ function createVideoCard(video) {
     </div>
 
     <div class="video-info">
+
       <a
         class="video-title"
         href="${escapeHTML(videoUrl)}"
@@ -108,8 +127,11 @@ function createVideoCard(video) {
       >${escapeHTML(video.title || "Untitled video")}</a>
 
       <div class="video-meta">
-        ${video.views ? `<span>${escapeHTML(video.views)}</span>` : ""}
+        ${video.views
+          ? `<span>${escapeHTML(video.views)}</span>`
+          : ""}
       </div>
+
     </div>
   `;
 
@@ -118,13 +140,10 @@ function createVideoCard(video) {
   if (thumbnail) {
     img.src = thumbnail;
 
-    // Fall back to the original image URL if the thumbnail fails.
-    const fallback = safeUrl(video.imageURL);
-
-    if (fallback && fallback !== thumbnail) {
+    if (fallbackThumbnail && fallbackThumbnail !== thumbnail) {
       img.addEventListener("error", function onError() {
         img.removeEventListener("error", onError);
-        img.src = fallback;
+        img.src = fallbackThumbnail;
       });
     }
   } else {
@@ -134,6 +153,10 @@ function createVideoCard(video) {
   return card;
 }
 
+/* =========================================
+   PREVIEW MANAGEMENT
+========================================= */
+
 function stopPreview() {
   clearTimeout(previewTimer);
   previewTimer = null;
@@ -141,45 +164,112 @@ function stopPreview() {
   if (!activePreview) return;
 
   const video = activePreview;
+  const card = video.closest(".video-card");
+  const thumbnail = card?.querySelector(".video-thumbnail");
+  const button = card?.querySelector(".preview-button");
 
   video.pause();
   video.hidden = true;
   video.removeAttribute("src");
   video.load();
 
+  if (thumbnail) {
+    thumbnail.hidden = false;
+  }
+
+  if (button) {
+    button.textContent = "▶ Preview";
+    button.setAttribute("aria-label", "Play video preview");
+  }
+
   activePreview = null;
 }
 
-async function startPreview(container) {
-  if (dataSaver.checked) return;
-  if (!container.matches(":hover")) return;
+async function startPreview(container, manual = false) {
+  if (!container) return;
+
+  // Data Saver blocks automatic previews, not manual playback.
+  if (dataSaver.checked && !manual) return;
+
+  if (!manual && !container.matches(":hover")) return;
 
   const video = container.querySelector(".video-preview");
+  const button = container.querySelector(".preview-button");
+  const thumbnail = container.querySelector(".video-thumbnail");
 
   if (!video || !video.dataset.src) return;
+
+  // Clicking the active preview button stops playback.
+  if (manual && activePreview === video && !video.paused) {
+    stopPreview();
+    return;
+  }
 
   stopPreview();
 
   activePreview = video;
-  video.src = video.dataset.src;
+
+  if (button) {
+    button.textContent = "Loading…";
+  }
+
   video.hidden = false;
+
+  if (thumbnail) {
+    thumbnail.hidden = true;
+  }
+
+  video.src = video.dataset.src;
 
   try {
     await video.play();
 
+    // Another preview may have started while this one loaded.
     if (activePreview !== video) return;
 
+    if (button) {
+      button.textContent = "Ⅱ Stop preview";
+      button.setAttribute("aria-label", "Stop video preview");
+    }
+
+    // Stop after a few seconds to save data.
     previewTimer = setTimeout(() => {
       stopPreview();
     }, MAX_PREVIEW_SECONDS * 1000);
+
   } catch (error) {
     if (activePreview === video) {
       stopPreview();
+
+      if (button) {
+        button.textContent = "▶ Retry preview";
+      }
     }
   }
 }
 
-// Hover preview on desktop.
+/* =========================================
+   PREVIEW BUTTON — TOUCH AND DESKTOP
+========================================= */
+
+resultsContainer.addEventListener("click", event => {
+  const button = event.target.closest(".preview-button");
+
+  if (!button) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const container = button.closest(".thumbnail-container");
+
+  // Manual preview works even when Data Saver is enabled.
+  startPreview(container, true);
+});
+
+/* =========================================
+   DESKTOP HOVER PREVIEWS
+========================================= */
+
 resultsContainer.addEventListener("pointerover", event => {
   if (event.pointerType !== "mouse" || dataSaver.checked) return;
 
@@ -190,7 +280,7 @@ resultsContainer.addEventListener("pointerover", event => {
   clearTimeout(hoverTimer);
 
   hoverTimer = setTimeout(() => {
-    startPreview(container);
+    startPreview(container, false);
   }, HOVER_DELAY);
 });
 
@@ -211,23 +301,35 @@ resultsContainer.addEventListener("pointerout", event => {
   }
 });
 
-// Data Saver prevents preview downloads.
+/* =========================================
+   DATA SAVER
+========================================= */
+
 dataSaver.addEventListener("change", () => {
   if (dataSaver.checked) {
     clearTimeout(hoverTimer);
+
+    // Stop automatic/active preview when Data Saver is enabled.
     stopPreview();
   }
 });
 
+/* =========================================
+   SEARCH AND PAGINATION
+========================================= */
+
 async function loadPage(reset = false) {
   if (loading) return;
   if (!reset && !hasMore) return;
+  if (!currentQuery.trim()) return;
 
   if (reset) {
-    if (searchController) searchController.abort();
+    if (searchController) {
+      searchController.abort();
+    }
 
-    stopPreview();
     clearTimeout(hoverTimer);
+    stopPreview();
 
     searchController = new AbortController();
     searchId++;
@@ -237,14 +339,21 @@ async function loadPage(reset = false) {
 
     currentPage = 0;
     hasMore = false;
+
+    resultCount.textContent = "";
+    pageIndicator.textContent = "";
+  } else if (!searchController || searchController.signal.aborted) {
+    searchController = new AbortController();
   }
 
   const requestId = searchId;
+  const controller = searchController;
 
   loading = true;
   searchButton.disabled = true;
   loadMoreButton.hidden = true;
-  statusElement.textContent = "Loading videos...";
+
+  statusElement.textContent = "Searching…";
 
   const nextPage = currentPage + 1;
 
@@ -255,7 +364,7 @@ async function loadPage(reset = false) {
     });
 
     const response = await fetch(`/api/search?${params}`, {
-      signal: searchController?.signal
+      signal: controller.signal
     });
 
     if (!response.ok) {
@@ -271,40 +380,43 @@ async function loadPage(reset = false) {
     }
 
     const fragment = document.createDocumentFragment();
-    let added = 0;
 
     for (const video of data.results) {
       const url = safeUrl(video.videoUrl);
 
       if (!url || seenVideoUrls.has(url)) continue;
 
-      seenVideoUrls.add(url);
-
       const card = createVideoCard(video);
 
-      if (card) {
-        fragment.appendChild(card);
-        added++;
-      }
+      if (!card) continue;
+
+      seenVideoUrls.add(url);
+      fragment.appendChild(card);
     }
 
     resultsContainer.appendChild(fragment);
 
     currentPage = nextPage;
+
+    // Stop when the server returns no results.
     hasMore = data.results.length > 0;
 
-    resultCount.textContent =
-      `${resultsContainer.children.length} videos loaded`;
+    const total = resultsContainer.children.length;
+
+    resultCount.textContent = `${total} videos`;
 
     pageIndicator.textContent = `Page ${currentPage}`;
 
-    statusElement.textContent = hasMore
-      ? ""
-      : resultsContainer.children.length
-        ? "No more results."
-        : "No videos found.";
+    if (total === 0) {
+      statusElement.textContent = "No videos found.";
+    } else if (!hasMore) {
+      statusElement.textContent = "No more results.";
+    } else {
+      statusElement.textContent = "";
+    }
 
     loadMoreButton.hidden = !hasMore;
+
   } catch (error) {
     if (error.name === "AbortError") return;
 
@@ -312,10 +424,11 @@ async function loadPage(reset = false) {
 
     if (requestId === searchId) {
       statusElement.textContent =
-        "Unable to load results. Please try again.";
+        "Unable to load videos. Please try again.";
 
       loadMoreButton.hidden = false;
     }
+
   } finally {
     if (requestId === searchId) {
       loading = false;
@@ -324,24 +437,42 @@ async function loadPage(reset = false) {
   }
 }
 
+/* =========================================
+   SEARCH FORM
+========================================= */
+
 searchForm.addEventListener("submit", event => {
   event.preventDefault();
 
   const query = searchInput.value.trim();
 
-  if (!query) return;
+  if (!query) {
+    searchInput.focus();
+    return;
+  }
 
   currentQuery = query;
   loadPage(true);
 });
 
+/* =========================================
+   LOAD MORE
+========================================= */
+
 loadMoreButton.addEventListener("click", () => {
   loadPage();
 });
 
-// Infinite scrolling.
+/* =========================================
+   INFINITE SCROLL
+========================================= */
+
 const observer = new IntersectionObserver(entries => {
-  if (entries.some(entry => entry.isIntersecting) && hasMore && !loading) {
+  if (
+    entries.some(entry => entry.isIntersecting) &&
+    hasMore &&
+    !loading
+  ) {
     loadPage();
   }
 }, {
@@ -349,19 +480,24 @@ const observer = new IntersectionObserver(entries => {
 });
 
 observer.observe(scrollSentinel);
-const resultsGrid = document.getElementById("results");
-const layoutToggle = document.getElementById("layoutToggle");
 
-// Bigger cards are the default.
+/* =========================================
+   CARD LAYOUT TOGGLE
+========================================= */
+
 const savedLayout = localStorage.getItem("videoCardLayout");
 const startCompact = savedLayout === "compact";
 
 function applyCardLayout(compact) {
-  resultsGrid.classList.toggle("compact-cards", compact);
-  resultsGrid.classList.toggle("large-cards", !compact);
+  resultsContainer.classList.toggle("compact-cards", compact);
+  resultsContainer.classList.toggle("large-cards", !compact);
 
   layoutToggle.textContent = compact ? "▦ Bigger" : "▤ Compact";
-  layoutToggle.setAttribute("aria-pressed", String(!compact));
+
+  layoutToggle.setAttribute(
+    "aria-pressed",
+    String(!compact)
+  );
 
   localStorage.setItem(
     "videoCardLayout",
@@ -372,6 +508,6 @@ function applyCardLayout(compact) {
 applyCardLayout(startCompact);
 
 layoutToggle.addEventListener("click", () => {
-  const isCompact = resultsGrid.classList.contains("compact-cards");
-  applyCardLayout(!isCompact);
+  const compact = resultsContainer.classList.contains("compact-cards");
+  applyCardLayout(!compact);
 });
