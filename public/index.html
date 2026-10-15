@@ -1,68 +1,45 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101014">
-
   <title>Video Search</title>
-
   <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
 </head>
 <body>
+  <header class="topbar">
+    <a class="brand" href="/">Video<span>Search</span></a><form id="searchForm" class="search-form">
+  <input
+    id="searchInput"
+    type="search"
+    placeholder="Search videos..."
+    autocomplete="off"
+    required
+  >
+  <button id="searchButton" type="submit">Search</button>
+</form>
 
-  <header class="header">
-    <a class="logo" href="/">Video<span>Search</span></a>
+<button id="layoutToggle" class="layout-toggle" type="button">
+  ▦ Bigger
+</button>
 
-    <label class="data-saving">
-      <input type="checkbox" id="dataSaver" checked>
-      <span>Data Saver</span>
-    </label>
-  </header>
+  </header>  <main>
+    <section class="toolbar">
+      <span id="status">Search for videos</span>
+      <div class="toolbar-options">
+        <label class="saver-toggle">
+          <input id="dataSaver" type="checkbox" checked>
+          Data saver
+        </label>
+        <span id="resultCount"></span>
+      </div>
+    </section><div id="results" class="results large-cards"></div>
 
-  <main class="main">
-    <section class="search-section">
-      <h1>Find videos</h1>
-      <p>Search videos while saving mobile data.</p>
+<div id="scrollSentinel"></div>
 
-      <form id="searchForm" class="search-form">
-        <input
-          type="search"
-          id="searchInput"
-          placeholder="Search videos..."
-          maxlength="150"
-          autocomplete="off"
-          required
-        >
+<div class="bottom-controls">
+  <span id="pageIndicator"></span>
+  <button id="loadMoreButton" type="button" hidden>Load more</button>
+</div>
 
-        <button type="submit" id="searchButton">Search</button>
-      </form>
-
-      <p class="preview-help">
-        Enable previews by turning off Data Saver.
-      </p>
-    </section>
-
-    <div class="results-header">
-      <span id="resultCount">Search for something to begin.</span>
-      <span id="pageIndicator"></span>
-    </div>
-
-    <section id="results" class="results"></section>
-
-    <div id="status" class="status" role="status" aria-live="polite"></div>
-
-    <button id="loadMoreButton" class="load-more" hidden>
-      Load more
-    </button>
-
-    <div id="scrollSentinel" aria-hidden="true"></div>
-  </main>
-
-  <footer class="footer">
-    Lightweight Video Search
-  </footer>
-
-</body>
+  </main>  <script src="/app.js" defer></script></body>
 </html>
