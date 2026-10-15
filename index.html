@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Video Search</title>
+
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+  <header class="header">
+    <a class="logo" href="/">VideoSearch</a>
+    <span class="badge">Metadata Search</span>
+  </header>
+
+  <main class="container">
+
+    <section class="hero">
+      <h1>Find videos</h1>
+
+      <p>
+        Search video titles, thumbnails and available previews.
+      </p>
+
+      <form id="searchForm" class="search-form">
+        <input
+          id="searchInput"
+          type="search"
+          placeholder="Enter search term..."
+          autocomplete="off"
+          required
+        >
+
+        <button id="searchButton" type="submit">
+          Search
+        </button>
+      </form>
+
+      <p id="status" role="status"></p>
+    </section>
+
+    <section class="results-section">
+      <div class="results-heading">
+        <h2>Results</h2>
+        <span id="resultCount"></span>
+      </div>
+
+      <div id="results" class="grid"></div>
+    </section>
+
+  </main>
+
+  <footer>
+    Lightweight video metadata search
+  </footer>
+
+  <script src="/app.js"></script>
+
+</body>
+</html>
