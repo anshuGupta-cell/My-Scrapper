@@ -1,22 +1,26 @@
 /* =========================================
-   VIDEO SEARCH — COMPLETE UI REDESIGN
+   DESIGN TOKENS & RESET
 ========================================= */
-
 :root {
   color-scheme: dark;
   --bg: #0b0c10;
-  --surface: #13151b;
-  --surface-hover: #1b1e26;
-  --border: #292c36;
-  --text: #f5f5f7;
-  --muted: #969baa;
-  --accent: #a78bfa;
-  --accent-hover: #8b5cf6;
+  --surface: #141720;
+  --surface-hover: #1b1f2b;
+  --border: #232734;
+  --border-focus: #4b5268;
+  --text: #f3f4f6;
+  --text-muted: #8b92a5;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --transition: 0.18s ease;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
-  
+  margin: 0;
+  padding: 0;
 }
 
 html {
@@ -24,163 +28,117 @@ html {
 }
 
 body {
-  margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
 /* =========================================
-   NAVBAR
+   HEADER / NAVBAR
 ========================================= */
-
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 100;
-
+  z-index: 50;
   display: flex;
   align-items: center;
-  gap: 18px;
-
-  min-height: 66px;
-  padding: 10px 22px;
-
-  background: rgba(15, 16, 22, 0.94);
+  gap: 16px;
+  padding: 10px 20px;
+  background: rgba(11, 12, 16, 0.88);
   border-bottom: 1px solid var(--border);
-
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-
-  flex-shrink: 0;
+  gap: 8px;
   color: var(--text);
   text-decoration: none;
-
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.8px;
+  font-size: 17px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
-.brand span {
+.brand-icon {
   color: var(--accent);
 }
 
-/* =========================================
-   SEARCH BAR
-========================================= */
+.brand strong {
+  color: var(--accent);
+}
 
+/* Search Form */
 .search-form {
   display: flex;
   align-items: center;
   gap: 8px;
-
-  width: 100%;
-  max-width: 650px;
-  min-width: 0;
+  flex: 1;
+  max-width: 600px;
   margin: 0 auto;
 }
 
 .search-form input {
-  display: block;
   flex: 1;
-  width: 100%;
-  min-width: 0;
-  height: 44px;
-
-  padding: 0 15px;
-
+  height: 40px;
+  padding: 0 14px;
+  background: #141722;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--text);
-  background: #1b1d25;
-
-  border: 1px solid #30333e;
-  border-radius: 12px;
-  outline: none;
-
-  font: inherit;
   font-size: 14px;
-
-  transition:
-    border-color 0.2s,
-    background 0.2s,
-    box-shadow 0.2s;
-}
-
-.search-form input::placeholder {
-  color: #858998;
+  outline: none;
+  transition: border-color var(--transition);
 }
 
 .search-form input:focus {
-  background: #20222b;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(167 139 250 / 10%);
+}
+
+.search-form input::placeholder {
+  color: var(--text-muted);
 }
 
 .search-form button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  flex-shrink: 0;
-  height: 44px;
-  padding: 0 20px;
-
-  color: #171222;
+  height: 40px;
+  padding: 0 18px;
   background: var(--accent);
+  color: #fff;
   border: 0;
-  border-radius: 12px;
-
-  font: inherit;
+  border-radius: var(--radius-sm);
   font-size: 13px;
-  font-weight: 750;
-
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
+  transition: background-color var(--transition);
+  flex-shrink: 0;
 }
 
 .search-form button:hover {
-  background: #c4b5fd;
+  background: var(--accent-hover);
 }
 
-.search-form button:active {
-  transform: scale(0.97);
+.search-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-/* =========================================
-   LAYOUT TOGGLE
-========================================= */
-
+/* Layout Button */
 .layout-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  flex-shrink: 0;
-  min-height: 40px;
-  padding: 0 13px;
-
-  color: #dedee7;
-  background: #1b1d25;
+  height: 38px;
+  padding: 0 14px;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-
+  border-radius: var(--radius-sm);
+  color: var(--text);
   font-size: 12px;
-  font-weight: 650;
-  white-space: nowrap;
-
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--transition);
 }
 
 .layout-toggle:hover {
@@ -188,199 +146,128 @@ body {
 }
 
 /* =========================================
-   MAIN CONTENT
+   MAIN LAYOUT & TOOLBAR
 ========================================= */
-
 main {
-  width: 100%;
-  max-width: 1150px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 18px 20px 40px;
+  padding: 16px 20px 48px;
 }
-
-/* =========================================
-   SEARCH STATUS AND OPTIONS
-========================================= */
 
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-
-  min-height: 36px;
-  margin-bottom: 14px;
-
-  color: var(--muted);
-  font-size: 12px;
+  margin-bottom: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  min-height: 24px;
 }
 
 .toolbar-options {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
+  gap: 16px;
 }
 
 .saver-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-
-  color: #c0c2cd;
-  font-size: 12px;
-  white-space: nowrap;
+  gap: 6px;
   cursor: pointer;
+  user-select: none;
 }
 
 .saver-toggle input {
-  width: 15px;
-  height: 15px;
-  margin: 0;
   accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* =========================================
-   VIDEO GRID — LARGE CARDS BY DEFAULT
+   VIDEO CARDS & GRID
 ========================================= */
-
 .results {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .video-card {
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 15px;
-
-  transition: border-color 0.2s;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--transition);
 }
 
 .video-card:hover {
-  border-color: #414452;
+  border-color: var(--border-focus);
 }
-
-/* Large thumbnail */
 
 .thumbnail-container {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  background: #0f1118;
   overflow: hidden;
-
-  background: #191b22;
 }
 
 .video-thumbnail,
 .video-preview {
   position: absolute;
   inset: 0;
-
-  display: block;
   width: 100%;
   height: 100%;
-
   object-fit: cover;
 }
 
-.video-thumbnail {
-  transition: transform 0.25s;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .video-card:hover .video-thumbnail {
-    transform: scale(1.015);
-  }
-}
-
-/* =========================================
-   TRANSPARENT PREVIEW BUTTON
-========================================= */
-
 .preview-button {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 5;
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-
-  min-height: 36px;
-  padding: 0 12px;
-
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
   color: #fff;
-  background: rgb(0 0 0 / 48%);
-  border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: 9px;
-
-  font-size: 12px;
-  font-weight: 650;
-
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-
+  font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
+  backdrop-filter: blur(4px);
 }
 
-.preview-button:active {
-  background: rgb(0 0 0 / 80%);
+.preview-button:hover {
+  background: rgba(0, 0, 0, 0.85);
 }
-
-/* =========================================
-   DURATION BADGE
-========================================= */
 
 .duration {
   position: absolute;
   right: 10px;
   bottom: 10px;
-  z-index: 4;
-
-  padding: 5px 7px;
-
+  padding: 3px 6px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 4px;
   color: #fff;
-  background: rgb(0 0 0 / 78%);
-  border: 1px solid rgb(255 255 255 / 10%);
-  border-radius: 6px;
-
   font-size: 11px;
-  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
-/* =========================================
-   VIDEO DETAILS
-========================================= */
-
 .video-info {
-  padding: 13px 15px 15px;
-  border-top: 1px solid var(--border);
+  padding: 12px 14px;
 }
 
 .video-title {
   display: -webkit-box;
-  overflow: hidden;
-
-  color: #f1f1f5;
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.5;
-  text-decoration: none;
-
-  overflow-wrap: anywhere;
-
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
 }
 
 .video-title:hover {
@@ -388,46 +275,57 @@ main {
 }
 
 .video-meta {
-  margin-top: 7px;
-  color: var(--muted);
+  margin-top: 6px;
   font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* =========================================
-   COMPACT GRID MODE
+   WIDE (DESKTOP) LAYOUT
 ========================================= */
+@media (min-width: 768px) {
+  .results:not(.compact-cards) .video-card {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
 
+  .results:not(.compact-cards) .thumbnail-container {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .results:not(.compact-cards) .video-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 16px 20px;
+  }
+
+  .results:not(.compact-cards) .video-title {
+    font-size: 15px;
+  }
+}
+
+/* =========================================
+   COMPACT GRID LAYOUT
+========================================= */
 .results.compact-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
 
 .results.compact-cards .video-info {
-  padding: 9px;
+  padding: 10px;
 }
 
 .results.compact-cards .video-title {
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.results.compact-cards .video-meta {
-  font-size: 10px;
-}
-
-.results.compact-cards .preview-button {
-  top: 7px;
-  left: 7px;
-  min-height: 30px;
-  padding: 0 8px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* =========================================
-   LOADING / EMPTY STATES
+   FOOTER & PAGINATION
 ========================================= */
-
 #scrollSentinel {
   height: 1px;
 }
@@ -436,157 +334,40 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-
-  padding: 22px 0;
-
-  color: var(--muted);
-  font-size: 12px;
+  gap: 10px;
+  margin-top: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 #loadMoreButton {
-  min-height: 42px;
-  padding: 0 22px;
-
+  padding: 8px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   color: var(--text);
-  background: #20222b;
-  border: 1px solid #343743;
-  border-radius: 10px;
-
-  font: inherit;
-  font-weight: 650;
+  font-size: 13px;
   cursor: pointer;
 }
 
 #loadMoreButton:hover {
-  background: #2a2d38;
+  background: var(--surface-hover);
 }
 
-/* =========================================
-   TABLET AND DESKTOP
-========================================= */
-
-@media (min-width: 700px) {
-  .results {
-    gap: 20px;
-  }
-
-  .results.compact-cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 900px) {
-  .results:not(.compact-cards) .video-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    align-items: stretch;
-  }
-
-  .results:not(.compact-cards) .thumbnail-container {
-    height: 100%;
-    min-height: 200px;
-    aspect-ratio: auto;
-  }
-
-  .results:not(.compact-cards) .video-info {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-
-    padding: 20px;
-    border-top: 0;
-    border-left: 1px solid var(--border);
-  }
-
-  .results:not(.compact-cards) .video-title {
-    font-size: 16px;
-  }
-
-  .results.compact-cards {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-/* =========================================
-   MOBILE NAVBAR
-========================================= */
-
-@media (max-width: 600px) {
+/* Mobile responsive navigation */
+@media (max-width: 560px) {
   .topbar {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    flex-wrap: wrap;
     gap: 10px;
-
-    min-height: auto;
-    padding: 12px;
-  }
-
-  .brand {
-    font-size: 19px;
-  }
-
-  .layout-toggle {
-    min-height: 36px;
-    padding: 0 10px;
   }
 
   .search-form {
-    grid-column: 1 / -1;
-    max-width: none;
-    gap: 8px;
+    order: 3;
+    width: 100%;
+    max-width: 100%;
   }
 
-  .search-form input {
-    height: 43px;
-    font-size: 14px;
-  }
-
-  .search-form button {
-    height: 43px;
-    padding: 0 17px;
-  }
-
-  main {
-    padding: 12px 10px 30px;
-  }
-
-  .toolbar {
-    margin-bottom: 11px;
-  }
-
-  .results {
-    gap: 13px;
-  }
-
-  .video-info {
-    padding: 11px 12px 13px;
-  }
-
-  .video-title {
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 360px) {
-  .topbar {
-    padding: 10px;
-  }
-
-  .brand {
-    font-size: 17px;
-  }
-
-  main {
-    padding-right: 8px;
-    padding-left: 8px;
-  }
-
-  .results.compact-cards {
-    gap: 7px;
-  }
-
-  .results.compact-cards .video-info {
-    padding: 7px;
+  .layout-toggle {
+    margin-left: auto;
   }
 }
