@@ -1,226 +1,350 @@
-const form = document.getElementById("searchForm");
-const input = document.getElementById("searchInput");
-const button = document.getElementById("searchButton");
-const status = document.getElementById("status");
-const results = document.getElementById("results");
+const searchForm = document.getElementById("searchForm");
+const searchInput = document.getElementById("searchInput");
+const searchButton = document.getElementById("searchButton");
+const resultsContainer = document.getElementById("results");
+const statusElement = document.getElementById("status");
 const resultCount = document.getElementById("resultCount");
+const pageIndicator = document.getElementById("pageIndicator");
+const loadMoreButton = document.getElementById("loadMoreButton");
+const scrollSentinel = document.getElementById("scrollSentinel");
+const dataSaver = document.getElementById("dataSaver");
 
-let query = "";
-let page = 1;
+let currentQuery = "";
+let currentPage = 0;
+let totalResults = 0;
 let loading = false;
 let hasMore = false;
-let controller = null;
+let searchController = null;
 
-const seenUrls = new Set();
+const seenVideoUrls = new Set();
+const activePreviews = new Set();
 
-function element(tag, className, text) {
-  const el = document.createElement(tag);
-
-  if (className) el.className = className;
-  if (text !== undefined) el.textContent = text;
-
-  return el;
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
 }
 
-function safeUrl(value) {
+function validHttpUrl(value) {
+  if (!value) return "";
+
   try {
-    const url = new URL(value);
+    const url = new URL(value, window.location.origin);
 
-    return ["http:", "https:"].includes(url.protocol)
-      ? url.href
-      : null;
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return "";
+    }
+
+    return url.href;
   } catch {
-    return null;
+    return "";
   }
 }
 
-function createCard(item) {
-  const card = element("article", "card");
-  const thumbnail = element("div", "thumbnail");
-  const imageUrl = safeUrl(item.thumbnail);
-  const videoUrl = safeUrl(item.videoUrl);
-  const previewUrl = safeUrl(item.preview);
+function createVideoCard(video) {
+  const videoUrl = validHttpUrl(video.videoUrl);
+  const thumbnail = validHttpUrl(video.thumbnail);
+  const preview = validHttpUrl(video.preview);
 
-  if (imageUrl) {
-    const img = element("img");
-    img.src = imageUrl;
-    img.alt = item.title || "Video thumbnail";
-    img.loading = "lazy";
-    img.decoding = "async";
-    thumbnail.append(img);
-  }
+  if (!videoUrl) return null;
 
-  const content = element("div", "card-content");
+  const card = document.createElement("article");
+  card.className = "video-card";
 
-  content.append(
-    element("h3", "", item.title || "Untitled video")
-  );
-
-  const meta = element("div", "meta");
-
-  if (item.duration) {
-    meta.append(element("span", "", item.duration));
-  }
-
-  if (item.views) {
-    meta.append(element("span", "", item.views));
-  }
-
-  content.append(meta);
-
-  const actions = element("div", "actions");
-
-  if (videoUrl) {
-    const open = element("a", "open-button", "Open video");
-
-    open.href = videoUrl;
-    open.target = "_blank";
-    open.rel = "noopener noreferrer";
-
-    actions.append(open);
-  }
-
-  if (previewUrl) {
-    const preview = element(
-      "button",
-      "preview-button",
-      "Show preview"
-    );
-
-    preview.type = "button";
-
-    preview.addEventListener("click", () => {
-      const existing = thumbnail.querySelector("video");
-
-      if (existing) {
-        existing.remove();
-
-        const img = thumbnail.querySelector("img");
-        if (img) img.hidden = false;
-
-        preview.textContent = "Show preview";
-        return;
+  card.innerHTML = `
+    <div class="thumbnail-container">
+      ${
+        thumbnail
+          ? `<img
+              src="${escapeHTML(thumbnail)}"
+              alt="${escapeHTML(video.title || "Video thumbnail")}"
+              loading="lazy"
+              decoding="async"
+            >`
+          : `<div class="thumbnail-placeholder"></div>`
       }
 
-      const video = element("video");
+      ${
+        preview
+          ? `<video
+              class="video-preview"
+              data-src="${escapeHTML(preview)}"
+              muted
+              loop
+              playsinline
+              preload="none"
+              hidden
+            ></video>
+            <span class="preview-indicator">PREVIEW</span>`
+          : ""
+      }
 
-      video.src = previewUrl;
-      video.controls = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.preload = "none";
+      ${
+        video.duration
+          ? `<span class="duration">${escapeHTML(video.duration)}</span>`
+          : ""
+      }
+    </div>
 
-      const img = thumbnail.querySelector("img");
-      if (img) img.hidden = true;
+    <div class="video-info">
+      <a
+        class="video-title"
+        href="${escapeHTML(videoUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="${escapeHTML(video.title || "")}"
+      >${escapeHTML(video.title || "Untitled video")}</a>
 
-      thumbnail.append(video);
-      preview.textContent = "Hide preview";
-    });
-
-    actions.append(preview);
-  }
-
-  content.append(actions);
-  card.append(thumbnail, content);
+      <div class="video-meta">
+        ${video.views ? `<span>${escapeHTML(video.views)}</span>` : ""}
+      </div>
+    </div>
+  `;
 
   return card;
 }
 
-async function loadMore(reset = false) {
-  if (loading || (!hasMore && !reset)) return;
+function stopPreview(container) {
+  const video = container.querySelector(".video-preview");
+
+  if (!video) return;
+
+  video.pause();
+  video.hidden = true;
+
+  // Release the downloaded preview when data saver is enabled.
+  if (dataSaver.checked) {
+    video.removeAttribute("src");
+    video.load();
+  }
+
+  activePreviews.delete(video);
+}
+
+async function startPreview(container) {
+  if (dataSaver.checked && !container.matches(":hover")) {
+    return;
+  }
+
+  const video = container.querySelector(".video-preview");
+
+  if (!video) return;
+
+  const source = video.dataset.src;
+
+  if (!source) return;
+
+  // Avoid starting the same preview twice.
+  if (video.dataset.loading === "true") return;
+
+  // Stop other previews to limit simultaneous downloads.
+  for (const activeVideo of activePreviews) {
+    if (activeVideo !== video) {
+      const otherContainer = activeVideo.closest(".thumbnail-container");
+
+      if (otherContainer) stopPreview(otherContainer);
+    }
+  }
+
+  if (!video.getAttribute("src")) {
+    video.dataset.loading = "true";
+    video.src = source;
+    video.load();
+  }
+
+  video.hidden = false;
+  activePreviews.add(video);
+
+  try {
+    await video.play();
+  } catch {
+    video.hidden = true;
+  } finally {
+    video.dataset.loading = "false";
+  }
+}
+
+// Desktop hover preview.
+resultsContainer.addEventListener("pointerover", (event) => {
+  if (event.pointerType !== "mouse") return;
+
+  const container = event.target.closest(".thumbnail-container");
+
+  if (!container || container.contains(event.relatedTarget)) return;
+
+  startPreview(container);
+});
+
+resultsContainer.addEventListener("pointerout", (event) => {
+  if (event.pointerType !== "mouse") return;
+
+  const container = event.target.closest(".thumbnail-container");
+
+  if (!container || container.contains(event.relatedTarget)) return;
+
+  stopPreview(container);
+});
+
+// Clicking the thumbnail on mobile toggles preview playback.
+resultsContainer.addEventListener("click", (event) => {
+  const container = event.target.closest(".thumbnail-container");
+
+  if (!container) return;
+
+  if (event.target.closest("a")) return;
+
+  if (event.pointerType === "mouse") return;
+
+  const video = container.querySelector(".video-preview");
+
+  if (!video) return;
+
+  if (!video.paused) {
+    stopPreview(container);
+  } else {
+    startPreview(container);
+  }
+});
+
+function stopAllPreviews() {
+  document.querySelectorAll(".thumbnail-container").forEach((container) => {
+    stopPreview(container);
+  });
+}
+
+dataSaver.addEventListener("change", () => {
+  if (dataSaver.checked) {
+    stopAllPreviews();
+  }
+});
+
+async function loadPage({ reset = false } = {}) {
+  if (loading) return;
+
+  if (!reset && !hasMore) return;
 
   if (reset) {
-    if (controller) controller.abort();
+    if (searchController) searchController.abort();
 
-    controller = new AbortController();
-    page = 1;
-    hasMore = true;
-    seenUrls.clear();
-    results.replaceChildren();
-    resultCount.textContent = "";
+    stopAllPreviews();
+    resultsContainer.replaceChildren();
+    seenVideoUrls.clear();
+
+    currentPage = 0;
+    totalResults = 0;
+    hasMore = false;
+
+    searchController = new AbortController();
   }
 
   loading = true;
-  button.disabled = true;
-  status.textContent = "Loading videos...";
+  searchButton.disabled = true;
+  loadMoreButton.hidden = true;
+  statusElement.textContent = "Loading videos...";
+
+  const requestedPage = currentPage + 1;
 
   try {
-    const response = await fetch(
-      `/api/search?q=${encodeURIComponent(query)}&page=${page}`,
-      { signal: controller.signal }
-    );
+    const params = new URLSearchParams({
+      q: currentQuery,
+      page: String(requestedPage)
+    });
+
+    const response = await fetch(`/api/search?${params}`, {
+      signal: searchController.signal
+    });
+
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status})`);
+    }
 
     const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || "Unable to load videos.");
+    if (!Array.isArray(data.results)) {
+      throw new Error(data.error || "Unexpected API response.");
     }
 
     let added = 0;
 
-    for (const item of data.results || []) {
-      const url = safeUrl(item.videoUrl);
+    const fragment = document.createDocumentFragment();
 
-      if (!url || seenUrls.has(url)) continue;
+    for (const video of data.results) {
+      if (!video.videoUrl || seenVideoUrls.has(video.videoUrl)) {
+        continue;
+      }
 
-      seenUrls.add(url);
-      results.append(createCard(item));
-      added++;
+      seenVideoUrls.add(video.videoUrl);
+
+      const card = createVideoCard(video);
+
+      if (card) {
+        fragment.appendChild(card);
+        added++;
+      }
     }
 
-    page++;
-    hasMore = Boolean(data.hasMore);
+    resultsContainer.appendChild(fragment);
 
-    resultCount.textContent = `${seenUrls.size} videos`;
+    currentPage = requestedPage;
+    totalResults += added;
 
-    if (!seenUrls.size) {
-      results.append(
-        element(
-          "p",
-          "empty",
-          "No videos found. Try another search."
-        )
-      );
+    resultCount.textContent = `${totalResults} videos loaded`;
+    pageIndicator.textContent = `Page ${currentPage}`;
+
+    hasMore = data.results.length > 0;
+
+    if (added === 0 && data.results.length === 0) {
+      statusElement.textContent = "No more videos found.";
+    } else {
+      statusElement.textContent = "";
     }
 
-    status.textContent = hasMore
-      ? "Scroll down to load more."
-      : "No more results available.";
-
-    // Stop automatic repeated requests if a page contains
-    // no new results.
-    if (added === 0 && data.count > 0) {
-      hasMore = false;
-      status.textContent =
-        "No new videos found on the next page.";
-    }
-
+    loadMoreButton.hidden = !hasMore;
   } catch (error) {
-    if (error.name !== "AbortError") {
-      status.textContent = error.message;
-    }
+    if (error.name === "AbortError") return;
+
+    console.error("Search error:", error);
+
+    statusElement.textContent =
+      "Unable to load videos. Check your connection and try again.";
+
+    loadMoreButton.hidden = false;
   } finally {
     loading = false;
-    button.disabled = false;
+    searchButton.disabled = false;
   }
 }
 
-form.addEventListener("submit", async event => {
+searchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  query = input.value.trim();
+  const query = searchInput.value.trim();
 
   if (!query) return;
 
-  await loadMore(true);
+  currentQuery = query;
+
+  await loadPage({ reset: true });
 });
 
-window.addEventListener("scroll", () => {
-  const nearBottom =
-    window.innerHeight + window.scrollY >=
-    document.documentElement.scrollHeight - 600;
+loadMoreButton.addEventListener("click", () => {
+  loadPage();
+});
 
-  if (nearBottom) {
-    loadMore();
+// Automatically load another page as the user scrolls.
+const observer = new IntersectionObserver(
+  (entries) => {
+    if (entries.some((entry) => entry.isIntersecting) && hasMore && !loading) {
+      loadPage();
+    }
+  },
+  {
+    rootMargin: "500px 0px"
   }
-});
+);
+
+observer.observe(scrollSentinel);
