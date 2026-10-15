@@ -349,3 +349,29 @@ const observer = new IntersectionObserver(entries => {
 });
 
 observer.observe(scrollSentinel);
+const resultsGrid = document.getElementById("results");
+const layoutToggle = document.getElementById("layoutToggle");
+
+// Bigger cards are the default.
+const savedLayout = localStorage.getItem("videoCardLayout");
+const startCompact = savedLayout === "compact";
+
+function applyCardLayout(compact) {
+  resultsGrid.classList.toggle("compact-cards", compact);
+  resultsGrid.classList.toggle("large-cards", !compact);
+
+  layoutToggle.textContent = compact ? "▦ Bigger" : "▤ Compact";
+  layoutToggle.setAttribute("aria-pressed", String(!compact));
+
+  localStorage.setItem(
+    "videoCardLayout",
+    compact ? "compact" : "large"
+  );
+}
+
+applyCardLayout(startCompact);
+
+layoutToggle.addEventListener("click", () => {
+  const isCompact = resultsGrid.classList.contains("compact-cards");
+  applyCardLayout(!isCompact);
+});
