@@ -1,9 +1,20 @@
+const express = require("express");
+const axios = require("axios");
+const cheerio = require("cheerio");
+const path = require("path");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.static(path.join(__dirname, "public")));
+
 app.get("/api/search", async (req, res) => {
   const query = String(req.query.q || "").trim();
-  const page = Math.max(
-    1,
-    Math.min(100, Number.parseInt(req.query.page, 10) || 1)
-  );
+
+  const parsedPage = Number.parseInt(req.query.page, 10);
+  const page = Number.isFinite(parsedPage)
+    ? Math.max(1, Math.min(100, parsedPage))
+    : 1;
 
   if (!query || query.length > 150) {
     return res.status(400).json({
@@ -13,11 +24,11 @@ app.get("/api/search", async (req, res) => {
 
   try {
     const searchUrl = new URL(
-      "/search/" + encodeURIComponent(query).replace(/%20/g, "+"),
+      "/search/" +
+        encodeURIComponent(query).replace(/%20/g, "+"),
       "https://xhamster46.desi"
     );
 
-    // Verify this parameter against the site's actual pagination.
     if (page > 1) {
       searchUrl.searchParams.set("page", String(page));
     }
@@ -43,18 +54,18 @@ app.get("/api/search", async (req, res) => {
 
       if (!href) return;
 
-      let url;
+      let videoUrl;
 
       try {
-        url = new URL(href, searchUrl);
+        videoUrl = new URL(href, searchUrl);
       } catch {
         return;
       }
 
       if (
-        url.hostname !== "xhamster46.desi" ||
-        !url.pathname.includes("/videos/") ||
-        seen.has(url.href)
+        videoUrl.hostname !== "xhamster46.desi" ||
+        !videoUrl.pathname.includes("/videos/") ||
+        seen.has(videoUrl.href)
       ) {
         return;
       }
@@ -74,29 +85,29 @@ app.get("/api/search", async (req, res) => {
 
       if (!title) return;
 
-      const absolute = value => {
+      function absoluteUrl(value) {
         if (!value) return null;
 
         try {
-          const parsed = new URL(value, searchUrl);
+          const url = new URL(value, searchUrl);
 
-          if (!["http:", "https:"].includes(parsed.protocol)) {
+          if (!["http:", "https:"].includes(url.protocol)) {
             return null;
           }
 
-          return parsed.href;
+          return url.href;
         } catch {
           return null;
         }
-      };
+      }
 
-      const thumbnail = absolute(
+      const thumbnail = absoluteUrl(
         img.attr("data-src") ||
         img.attr("data-original") ||
         img.attr("src")
       );
 
-      const preview = absolute(
+      const preview = absoluteUrl(
         img.attr("data-preview") ||
         img.attr("data-video") ||
         container.find("video source").attr("src") ||
@@ -104,18 +115,18 @@ app.get("/api/search", async (req, res) => {
       );
 
       const duration =
-        container.find("[class*=duration]").first().text().trim() ||
-        null;
+        container.find("[class*=duration]")
+          .first().text().trim() || null;
 
       const views =
-        container.find("[class*=views]").first().text().trim() ||
-        null;
+        container.find("[class*=views]")
+          .first().text().trim() || null;
 
-      seen.add(url.href);
+      seen.add(videoUrl.href);
 
       results.push({
         title,
-        videoUrl: url.href,
+        videoUrl: videoUrl.href,
         thumbnail,
         preview,
         duration,
@@ -132,12 +143,15 @@ app.get("/api/search", async (req, res) => {
       hasMore: results.length > 0 && page < 100,
       results
     });
-
   } catch (error) {
     console.error("Scraping error:", error.message);
 
     res.status(502).json({
-      error: "Unable to retrieve this search page."
+      error: "Unable to retrieve search results."
     });
   }
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
