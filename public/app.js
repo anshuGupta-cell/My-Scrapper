@@ -1,3 +1,4 @@
+// DOM Element References
 const searchForm = document.getElementById("searchForm");
 const searchInput = document.getElementById("searchInput");
 const searchButton = document.getElementById("searchButton");
@@ -10,6 +11,7 @@ const scrollSentinel = document.getElementById("scrollSentinel");
 const dataSaver = document.getElementById("dataSaver");
 const layoutToggle = document.getElementById("layoutToggle");
 
+// App Constants & State
 const HOVER_DELAY = 600;
 const MAX_PREVIEW_SECONDS = 4;
 
@@ -28,7 +30,6 @@ const seenVideoUrls = new Set();
 /* =========================================
    HELPERS
 ========================================= */
-
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({
     "&": "&amp;",
@@ -41,30 +42,21 @@ function escapeHTML(value) {
 
 function safeUrl(value) {
   if (!value) return "";
-
   try {
     const url = new URL(value, location.origin);
-
-    return ["http:", "https:"].includes(url.protocol)
-      ? url.href
-      : "";
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
   } catch {
     return "";
   }
 }
 
 function getThumbnail(video) {
-  return (
-    safeUrl(video.thumbnail) ||
-    safeUrl(video.previewThumbnail) ||
-    ""
-  );
+  return safeUrl(video.thumbnail) || safeUrl(video.previewThumbnail) || "";
 }
 
 /* =========================================
-   VIDEO CARD CREATION
+   CARD CREATION
 ========================================= */
-
 function createVideoCard(video) {
   const videoUrl = safeUrl(video.videoUrl);
   const thumbnail = getThumbnail(video);
@@ -78,7 +70,6 @@ function createVideoCard(video) {
 
   card.innerHTML = `
     <div class="thumbnail-container">
-
       <img
         class="video-thumbnail"
         alt=""
@@ -86,60 +77,40 @@ function createVideoCard(video) {
         decoding="async"
         referrerpolicy="no-referrer"
       >
-
-      ${
-        preview
-          ? `
-            <video
-              class="video-preview"
-              data-src="${escapeHTML(preview)}"
-              muted
-              loop
-              playsinline
-              preload="none"
-              hidden
-            ></video>
-
-            <button
-              class="preview-button"
-              type="button"
-              aria-label="Play video preview"
-            >▶ Preview</button>
-          `
-          : ""
-      }
-
-      ${
-        video.duration
-          ? `<span class="duration">${escapeHTML(video.duration)}</span>`
-          : ""
-      }
-
+      ${preview ? `
+        <video
+          class="video-preview"
+          data-src="${escapeHTML(preview)}"
+          muted
+          loop
+          playsinline
+          preload="none"
+          hidden
+        ></video>
+        <button
+          class="preview-button"
+          type="button"
+          aria-label="Play video preview"
+        >▶ Preview</button>
+      ` : ""}
+      ${video.duration ? `<span class="duration">${escapeHTML(video.duration)}</span>` : ""}
     </div>
-
     <div class="video-info">
-
       <a
         class="video-title"
         href="${escapeHTML(videoUrl)}"
         target="_blank"
         rel="noopener noreferrer"
       >${escapeHTML(video.title || "Untitled video")}</a>
-
       <div class="video-meta">
-        ${video.views
-          ? `<span>${escapeHTML(video.views)}</span>`
-          : ""}
+        ${video.views ? `<span>${escapeHTML(video.views)}</span>` : ""}
       </div>
-
     </div>
   `;
 
   const img = card.querySelector(".video-thumbnail");
-
   if (thumbnail) {
     img.src = thumbnail;
-
     if (fallbackThumbnail && fallbackThumbnail !== thumbnail) {
       img.addEventListener("error", function onError() {
         img.removeEventListener("error", onError);
@@ -154,9 +125,8 @@ function createVideoCard(video) {
 }
 
 /* =========================================
-   PREVIEW MANAGEMENT
+   PREVIEWS (TOUCH + DESKTOP)
 ========================================= */
-
 function stopPreview() {
   clearTimeout(previewTimer);
   previewTimer = null;
@@ -173,10 +143,7 @@ function stopPreview() {
   video.removeAttribute("src");
   video.load();
 
-  if (thumbnail) {
-    thumbnail.hidden = false;
-  }
-
+  if (thumbnail) thumbnail.hidden = false;
   if (button) {
     button.textContent = "▶ Preview";
     button.setAttribute("aria-label", "Play video preview");
@@ -187,10 +154,7 @@ function stopPreview() {
 
 async function startPreview(container, manual = false) {
   if (!container) return;
-
-  // Data Saver blocks automatic previews, not manual playback.
   if (dataSaver.checked && !manual) return;
-
   if (!manual && !container.matches(":hover")) return;
 
   const video = container.querySelector(".video-preview");
@@ -199,32 +163,22 @@ async function startPreview(container, manual = false) {
 
   if (!video || !video.dataset.src) return;
 
-  // Clicking the active preview button stops playback.
   if (manual && activePreview === video && !video.paused) {
     stopPreview();
     return;
   }
 
   stopPreview();
-
   activePreview = video;
 
-  if (button) {
-    button.textContent = "Loading…";
-  }
-
+  if (button) button.textContent = "Loading…";
   video.hidden = false;
-
-  if (thumbnail) {
-    thumbnail.hidden = true;
-  }
+  if (thumbnail) thumbnail.hidden = true;
 
   video.src = video.dataset.src;
 
   try {
     await video.play();
-
-    // Another preview may have started while this one loaded.
     if (activePreview !== video) return;
 
     if (button) {
@@ -232,53 +186,34 @@ async function startPreview(container, manual = false) {
       button.setAttribute("aria-label", "Stop video preview");
     }
 
-    // Stop after a few seconds to save data.
     previewTimer = setTimeout(() => {
       stopPreview();
     }, MAX_PREVIEW_SECONDS * 1000);
-
-  } catch (error) {
+  } catch {
     if (activePreview === video) {
       stopPreview();
-
-      if (button) {
-        button.textContent = "▶ Retry preview";
-      }
+      if (button) button.textContent = "▶ Retry";
     }
   }
 }
 
-/* =========================================
-   PREVIEW BUTTON — TOUCH AND DESKTOP
-========================================= */
-
+// Click listener for manual preview button
 resultsContainer.addEventListener("click", event => {
   const button = event.target.closest(".preview-button");
-
   if (!button) return;
 
   event.preventDefault();
   event.stopPropagation();
-
-  const container = button.closest(".thumbnail-container");
-
-  // Manual preview works even when Data Saver is enabled.
-  startPreview(container, true);
+  startPreview(button.closest(".thumbnail-container"), true);
 });
 
-/* =========================================
-   DESKTOP HOVER PREVIEWS
-========================================= */
-
+// Pointer hover listeners
 resultsContainer.addEventListener("pointerover", event => {
   if (event.pointerType !== "mouse" || dataSaver.checked) return;
-
   const container = event.target.closest(".thumbnail-container");
-
   if (!container || container.contains(event.relatedTarget)) return;
 
   clearTimeout(hoverTimer);
-
   hoverTimer = setTimeout(() => {
     startPreview(container, false);
   }, HOVER_DELAY);
@@ -286,60 +221,42 @@ resultsContainer.addEventListener("pointerover", event => {
 
 resultsContainer.addEventListener("pointerout", event => {
   if (event.pointerType !== "mouse") return;
-
   const container = event.target.closest(".thumbnail-container");
-
   if (!container || container.contains(event.relatedTarget)) return;
 
   clearTimeout(hoverTimer);
-
-  if (
-    activePreview &&
-    activePreview.closest(".thumbnail-container") === container
-  ) {
+  if (activePreview && activePreview.closest(".thumbnail-container") === container) {
     stopPreview();
   }
 });
-
-/* =========================================
-   DATA SAVER
-========================================= */
 
 dataSaver.addEventListener("change", () => {
   if (dataSaver.checked) {
     clearTimeout(hoverTimer);
-
-    // Stop automatic/active preview when Data Saver is enabled.
     stopPreview();
   }
 });
 
 /* =========================================
-   SEARCH AND PAGINATION
+   SEARCH & PAGINATION
 ========================================= */
-
 async function loadPage(reset = false) {
   if (loading) return;
   if (!reset && !hasMore) return;
   if (!currentQuery.trim()) return;
 
   if (reset) {
-    if (searchController) {
-      searchController.abort();
-    }
-
+    if (searchController) searchController.abort();
     clearTimeout(hoverTimer);
     stopPreview();
 
     searchController = new AbortController();
     searchId++;
-
     resultsContainer.replaceChildren();
     seenVideoUrls.clear();
 
     currentPage = 0;
     hasMore = false;
-
     resultCount.textContent = "";
     pageIndicator.textContent = "";
   } else if (!searchController || searchController.signal.aborted) {
@@ -352,7 +269,6 @@ async function loadPage(reset = false) {
   loading = true;
   searchButton.disabled = true;
   loadMoreButton.hidden = true;
-
   statusElement.textContent = "Searching…";
 
   const nextPage = currentPage + 1;
@@ -367,27 +283,21 @@ async function loadPage(reset = false) {
       signal: controller.signal
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const data = await response.json();
-
     if (requestId !== searchId) return;
 
     if (!Array.isArray(data.results)) {
-      throw new Error(data.error || "Invalid API response");
+      throw new Error(data.error || "Invalid response format");
     }
 
     const fragment = document.createDocumentFragment();
-
     for (const video of data.results) {
       const url = safeUrl(video.videoUrl);
-
       if (!url || seenVideoUrls.has(url)) continue;
 
       const card = createVideoCard(video);
-
       if (!card) continue;
 
       seenVideoUrls.add(url);
@@ -395,16 +305,11 @@ async function loadPage(reset = false) {
     }
 
     resultsContainer.appendChild(fragment);
-
     currentPage = nextPage;
-
-    // Stop when the server returns no results.
     hasMore = data.results.length > 0;
 
     const total = resultsContainer.children.length;
-
     resultCount.textContent = `${total} videos`;
-
     pageIndicator.textContent = `Page ${currentPage}`;
 
     if (total === 0) {
@@ -416,19 +321,14 @@ async function loadPage(reset = false) {
     }
 
     loadMoreButton.hidden = !hasMore;
-
   } catch (error) {
     if (error.name === "AbortError") return;
-
     console.error("Search error:", error);
 
     if (requestId === searchId) {
-      statusElement.textContent =
-        "Unable to load videos. Please try again.";
-
+      statusElement.textContent = "Unable to load videos. Please try again.";
       loadMoreButton.hidden = false;
     }
-
   } finally {
     if (requestId === searchId) {
       loading = false;
@@ -437,72 +337,41 @@ async function loadPage(reset = false) {
   }
 }
 
-/* =========================================
-   SEARCH FORM
-========================================= */
-
+// Form Submission
 searchForm.addEventListener("submit", event => {
   event.preventDefault();
-
   const query = searchInput.value.trim();
-
   if (!query) {
     searchInput.focus();
     return;
   }
-
   currentQuery = query;
   loadPage(true);
 });
 
-/* =========================================
-   LOAD MORE
-========================================= */
-
-loadMoreButton.addEventListener("click", () => {
-  loadPage();
-});
-
-/* =========================================
-   INFINITE SCROLL
-========================================= */
+// Load more click & Intersection Observer
+loadMoreButton.addEventListener("click", () => loadPage());
 
 const observer = new IntersectionObserver(entries => {
-  if (
-    entries.some(entry => entry.isIntersecting) &&
-    hasMore &&
-    !loading
-  ) {
+  if (entries.some(e => e.isIntersecting) && hasMore && !loading) {
     loadPage();
   }
-}, {
-  rootMargin: "350px 0px"
-});
+}, { rootMargin: "350px 0px" });
 
 observer.observe(scrollSentinel);
 
 /* =========================================
-   CARD LAYOUT TOGGLE
+   LAYOUT TOGGLE
 ========================================= */
-
 const savedLayout = localStorage.getItem("videoCardLayout");
 const startCompact = savedLayout === "compact";
 
 function applyCardLayout(compact) {
   resultsContainer.classList.toggle("compact-cards", compact);
   resultsContainer.classList.toggle("large-cards", !compact);
-
   layoutToggle.textContent = compact ? "▦ Bigger" : "▤ Compact";
-
-  layoutToggle.setAttribute(
-    "aria-pressed",
-    String(!compact)
-  );
-
-  localStorage.setItem(
-    "videoCardLayout",
-    compact ? "compact" : "large"
-  );
+  layoutToggle.setAttribute("aria-pressed", String(!compact));
+  localStorage.setItem("videoCardLayout", compact ? "compact" : "large");
 }
 
 applyCardLayout(startCompact);
