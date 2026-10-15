@@ -2,66 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101014">
 
   <title>Video Search</title>
 
   <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
 </head>
-
 <body>
 
   <header class="header">
-    <a class="logo" href="/">VideoSearch</a>
-    <span class="badge">Metadata Search</span>
+    <a class="logo" href="/">Video<span>Search</span></a>
+
+    <label class="data-saving">
+      <input type="checkbox" id="dataSaver" checked>
+      <span>Data saver</span>
+    </label>
   </header>
 
-  <main class="container">
-
-    <section class="hero">
+  <main class="main">
+    <section class="search-section">
       <h1>Find videos</h1>
-
-      <p>
-        Search video titles, thumbnails and available previews.
-      </p>
+      <p>Search and preview videos without opening every page.</p>
 
       <form id="searchForm" class="search-form">
         <input
-          id="searchInput"
           type="search"
-          placeholder="Enter search term..."
+          id="searchInput"
+          placeholder="Search videos..."
+          maxlength="150"
           autocomplete="off"
           required
         >
 
-        <button id="searchButton" type="submit">
+        <button type="submit" id="searchButton">
           Search
         </button>
       </form>
-
-      <p id="status" role="status"></p>
     </section>
 
-    <section class="results-section">
-      <div class="results-heading">
-        <h2>Results</h2>
-        <span id="resultCount"></span>
-      </div>
+    <div class="results-header">
+      <span id="resultCount">Search for something to begin.</span>
+      <span id="pageIndicator"></span>
+    </div>
 
-      <div id="results" class="grid"></div>
-    </section>
+    <section id="results" class="results"></section>
 
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <button id="loadMoreButton" class="load-more" hidden>
+      Load more
+    </button>
+
+    <div id="scrollSentinel" aria-hidden="true"></div>
   </main>
 
-  <footer>
-    Lightweight video metadata search
+  <footer class="footer">
+    Video Search · Lightweight video discovery
   </footer>
-
-  <script src="/app.js"></script>
 
 </body>
 </html>
